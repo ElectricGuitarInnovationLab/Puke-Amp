@@ -199,15 +199,15 @@ Releases are initiated by version tags. For example, to publish version `0.2.1`:
 
    ```sh
    git add NeuralAmpModeler/config.h NeuralAmpModeler/installer/changelog.txt
-   git commit -m "Prepare release 0.2.8"
+   git commit -m "Prepare release 0.2.9"
    git push
    ```
 
 3. Create and push an annotated tag matching `PLUG_VERSION_STR` exactly:
 
    ```sh
-   git tag -a v0.2.8 -m "Puke Amp 0.2.8"
-   git push origin v0.2.8
+   git tag -a v0.2.9 -m "Puke Amp 0.2.9"
+   git push origin v0.2.9
    ```
 
 The **Release Puke Amp** workflow then validates the tag, builds both platforms,
