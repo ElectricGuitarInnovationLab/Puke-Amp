@@ -656,6 +656,20 @@ WDL_String NeuralAmpModeler::_ResolvePresetAssetPath(const std::string& storedPa
       const auto resolved = std::filesystem::u8path(mPresetModelsRoot.Get()) / std::filesystem::u8path(relative);
       if (std::filesystem::exists(resolved))
         return WDL_String(resolved.lexically_normal().string().c_str());
+
+        // Some factory presets refer to the original inch-suffixed IR names.
+        // Keep those presets working after the filenames were normalized.
+        const std::string legacySuffix = "in_from_center.wav";
+        if (relative.size() > legacySuffix.size() &&
+          relative.compare(relative.size() - legacySuffix.size(), legacySuffix.size(), legacySuffix) == 0)
+        {
+          const auto renamedRelative = relative.substr(0, relative.size() - legacySuffix.size()) +
+                                       "_from_center.wav";
+          const auto renamed = std::filesystem::u8path(mPresetModelsRoot.Get()) /
+                               std::filesystem::u8path(renamedRelative);
+          if (std::filesystem::exists(renamed))
+            return WDL_String(renamed.lexically_normal().string().c_str());
+        }
     }
   }
   catch (const std::filesystem::filesystem_error&)

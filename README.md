@@ -188,8 +188,8 @@ Releases are initiated by version tags. For example, to publish version `0.2.1`:
 1. Update the product version in `NeuralAmpModeler/config.h`:
 
    ```c
-   #define PLUG_VERSION_HEX 0x00000201
-   #define PLUG_VERSION_STR "0.2.1"
+   #define PLUG_VERSION_HEX 0x00000210
+   #define PLUG_VERSION_STR "0.2.10"
    ```
 
    Do not change `STATE_VERSION_STR` unless the serialized plugin-state format
