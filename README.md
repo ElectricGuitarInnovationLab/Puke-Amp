@@ -183,13 +183,13 @@ xcrun stapler validate "Puke-Amp-0.1.0-macOS.pkg"
 
 #### Publishing a release
 
-Releases are initiated by version tags. For example, to publish version `0.2.1`:
+Releases are initiated by version tags. For example, to publish version `0.2.11`:
 
 1. Update the product version in `NeuralAmpModeler/config.h`:
 
    ```c
-   #define PLUG_VERSION_HEX 0x00000210
-   #define PLUG_VERSION_STR "0.2.10"
+   #define PLUG_VERSION_HEX 0x00000211
+   #define PLUG_VERSION_STR "0.2.11"
    ```
 
    Do not change `STATE_VERSION_STR` unless the serialized plugin-state format
@@ -199,15 +199,15 @@ Releases are initiated by version tags. For example, to publish version `0.2.1`:
 
    ```sh
    git add NeuralAmpModeler/config.h NeuralAmpModeler/installer/changelog.txt
-   git commit -m "Prepare release 0.2.10"
+   git commit -m "Prepare release 0.2.11"
    git push
    ```
 
 3. Create and push an annotated tag matching `PLUG_VERSION_STR` exactly:
 
    ```sh
-   git tag -a v0.2.10 -m "Puke Amp 0.2.10"
-   git push origin v0.2.10
+   git tag -a v0.2.11 -m "Puke Amp 0.2.11"
+   git push origin v0.2.11
    ```
 
 The **Release Puke Amp** workflow then validates the tag, builds both platforms,
