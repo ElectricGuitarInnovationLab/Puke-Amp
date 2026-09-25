@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>PukeAmp</string>
 	<key>CFBundleGetInfoString</key>
-	<string>Puke Amp v0.2.13 Copyright 2026 Puke Amp and contributors</string>
+	<string>Puke Amp v0.2.14 Copyright 2026 Puke Amp and contributors</string>
 	<key>CFBundleIconFile</key>
 	<string>NeuralAmpModeler.icns</string>
 	<key>CFBundleIdentifier</key>
@@ -19,11 +19,11 @@
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.13</string>
+	<string>0.2.14</string>
 	<key>CFBundleSignature</key>
 	<string>PkAm</string>
 	<key>CFBundleVersion</key>
-	<string>0.2.13</string>
+	<string>0.2.14</string>
 	<key>CSResourcesFileMapped</key>
 	<true/>
 	<key>LSApplicationCategoryType</key>
