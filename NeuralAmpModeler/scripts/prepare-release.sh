@@ -72,15 +72,15 @@ if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; t
   exit 1
 fi
 
-perl -0pi -e 's/^#define PLUG_VERSION_HEX 0x[0-9A-Fa-f]+$/#define PLUG_VERSION_HEX '"${version_hex}"'/m; s/^#define PLUG_VERSION_STR "[^"]+"$/#define PLUG_VERSION_STR "'"${version}"'"/m' "${config_path}"
+LC_ALL=C perl -0pi -e 's/^#define PLUG_VERSION_HEX 0x[0-9A-Fa-f]+$/#define PLUG_VERSION_HEX '"${version_hex}"'/m; s/^#define PLUG_VERSION_STR "[^"]+"$/#define PLUG_VERSION_STR "'"${version}"'"/m' "${config_path}"
 
 if ! grep -q " - ${tag}" "${changelog_path}"; then
-  perl -0pi -e 's/\A([^\n]*\n[^\n]*\n)/$1\n'"${today}"' - '"${tag}"'\n/' "${changelog_path}"
+  LC_ALL=C perl -0pi -e 's{\A([^\n]*\n[^\n]*\n)}{$1\n'"${today}"' - '"${tag}"'\n}' "${changelog_path}"
 fi
 
 (
   cd "${script_dir}"
-  ./update_version-mac.py
+  python3 ./update_version-mac.py
 )
 
 git add \
