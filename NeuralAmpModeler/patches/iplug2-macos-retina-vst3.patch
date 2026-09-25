@@ -1,0 +1,107 @@
+diff --git a/IPlug/VST3/IPlugVST3_View.h b/IPlug/VST3/IPlugVST3_View.h
+index 401c536a3..e9560121d 100644
+--- a/IPlug/VST3/IPlugVST3_View.h
++++ b/IPlug/VST3/IPlugVST3_View.h
+@@ -135,17 +135,27 @@ public:
+ 
+   Steinberg::tresult PLUGIN_API setContentScaleFactor(ScaleFactor factor) override
+   {
++#ifdef OS_MAC
++    // Cocoa owns backing density. Optional host UI zoom is not implemented;
++    // accepting it here would overwrite Retina density without resizing the UI.
++    return Steinberg::kResultFalse;
++#else
+     mOwner.SetScreenScale(factor);
+ 
+     return Steinberg::kResultOk;
++#endif
+   }
+ 
+   Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID _iid, void** obj) override
+   {
++#ifndef OS_MAC
+     QUERY_INTERFACE(_iid, obj, IPlugViewContentScaleSupport::iid, IPlugViewContentScaleSupport)
++#endif
+     *obj = 0;
+     return CPluginView::queryInterface(_iid, obj);
+   }
+diff --git a/IGraphics/Platforms/IGraphicsMac_view.h b/IGraphics/Platforms/IGraphicsMac_view.h
+index 430a717a3..ebc072644 100644
+--- a/IGraphics/Platforms/IGraphicsMac_view.h
++++ b/IGraphics/Platforms/IGraphicsMac_view.h
+@@ -134,7 +134,8 @@ using namespace igraphics;
+ - (BOOL) acceptsFirstResponder;
+ - (BOOL) acceptsFirstMouse: (NSEvent*) pEvent;
+ - (void) viewDidMoveToWindow;
+-- (void) viewDidChangeBackingProperties: (NSNotification*) pNotification;
++- (void) viewDidChangeBackingProperties;
++- (void) updateBackingScale;
+ - (void) drawRect: (NSRect) bounds;
+ - (void) render;
+ - (void) killTimer;
+diff --git a/IGraphics/Platforms/IGraphicsMac_view.mm b/IGraphics/Platforms/IGraphicsMac_view.mm
+index aa097d568..a363cb7f1 100644
+--- a/IGraphics/Platforms/IGraphicsMac_view.mm
++++ b/IGraphics/Platforms/IGraphicsMac_view.mm
+@@ -562,6 +562,12 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeSt
+ 
+ - (void) viewDidMoveToWindow
+ {
++  [super viewDidMoveToWindow];
++#ifdef IGRAPHICS_METAL
++  // Moving/re-attaching the same view must not accumulate observers.
++  [[NSNotificationCenter defaultCenter] removeObserver:self name:NSViewFrameDidChangeNotification object:self];
++#endif
++
+   NSWindow* pWindow = [self window];
+   
+   if (pWindow)
+@@ -569,10 +575,7 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeSt
+     [pWindow makeFirstResponder: self];
+     [pWindow setAcceptsMouseMovedEvents: YES];
+     
+-    CGFloat newScale = [pWindow backingScaleFactor];
+-
+-    if (mGraphics)
+-      mGraphics->SetScreenScale(newScale);
++    [self updateBackingScale];
+     
+     #ifdef IGRAPHICS_METAL
+     [[NSNotificationCenter defaultCenter] addObserver:self
+@@ -595,17 +598,24 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeSt
+   }
+ }
+ 
+-- (void) viewDidChangeBackingProperties:(NSNotification*) pNotification
++- (void) viewDidChangeBackingProperties
++{
++  [super viewDidChangeBackingProperties];
++  [self updateBackingScale];
++}
++
++- (void) updateBackingScale
+ {
+   NSWindow* pWindow = [self window];
+   
+-  if (!pWindow)
++  if (!pWindow || !mGraphics)
+     return;
+   
+   CGFloat newScale = [pWindow backingScaleFactor];
+   
+   mGraphics->SetPlatformContext(nullptr);
+   
++  // SetScreenScale also rebuilds the NanoVG framebuffer and invalidates drawing.
+   if (newScale != mGraphics->GetScreenScale())
+     mGraphics->SetScreenScale(newScale);
+ 
+@@ -681,6 +691,9 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeSt
+ #ifdef IGRAPHICS_METAL
+ - (void) frameDidChange:(NSNotification*) pNotification
+ {
++  if (![self window])
++    return;
++
+   CGFloat scale = [[self window] backingScaleFactor];
+ 
+   [(CAMetalLayer*)[self layer] setDrawableSize:CGSizeMake(self.frame.size.width * scale,

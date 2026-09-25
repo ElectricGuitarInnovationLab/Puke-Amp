@@ -47,6 +47,8 @@ if ! command -v xcodebuild >/dev/null 2>&1; then
   exit 1
 fi
 
+"${project_dir}/scripts/apply-iplug2-patches.sh"
+
 if [[ ! -d "${project_dir}/../iPlug2/Dependencies/IPlug/VST3_SDK" ]]; then
   echo "error: the VST3 SDK is missing." >&2
   echo "Run iPlug2/Dependencies/IPlug/download-iplug-sdks.sh first." >&2
