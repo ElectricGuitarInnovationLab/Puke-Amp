@@ -1,13 +1,13 @@
 #define PLUG_NAME "Puke Amp"
 #define PLUG_MFR "Puke"
-#define PLUG_VERSION_HEX 0x00000211
-#define PLUG_VERSION_STR "0.2.11"
+#define PLUG_VERSION_HEX 0x0000020C
+#define PLUG_VERSION_STR "0.2.12"
 #define STATE_VERSION_STR "0.7.17"
 #define PLUG_UNIQUE_ID 'PkAm'
 #define PLUG_MFR_ID 'SDAa'
 #define PLUG_URL_STR "https://github.com/ElectricGuitarInnovationLab/Puke-Amp"
 #define PLUG_EMAIL_STR "spam@me.com"
-#define PLUG_COPYRIGHT_STR "Copyright 2022 Steven Atkinson"
+#define PLUG_COPYRIGHT_STR "Copyright 2026 Puke Amp and contributors"
 #define PLUG_CLASS_NAME NeuralAmpModeler
 #define BUNDLE_NAME "PukeAmp"
 #define BUNDLE_MFR "theRATLAB"
@@ -32,9 +32,16 @@
 #define PLUG_HEIGHT 400
 #define PLUG_FPS 60
 #define PLUG_SHARED_RESOURCES 0
+// The macOS VST3 editor fits its fixed artwork into the host's content area.
+#if defined(__APPLE__) && defined(VST3_API)
+#define PLUG_HOST_RESIZE 1
+#else
 #define PLUG_HOST_RESIZE 0
-#define PLUG_MAX_WIDTH PLUG_WIDTH * 4
-#define PLUG_MAX_HEIGHT PLUG_HEIGHT * 4
+#endif
+#define PLUG_MIN_WIDTH (PLUG_WIDTH / 2)
+#define PLUG_MIN_HEIGHT (PLUG_HEIGHT / 2)
+#define PLUG_MAX_WIDTH (PLUG_WIDTH * 4)
+#define PLUG_MAX_HEIGHT (PLUG_HEIGHT * 4)
 
 #define AUV2_ENTRY NeuralAmpModeler_Entry
 #define AUV2_ENTRY_STR "NeuralAmpModeler_Entry"
