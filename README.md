@@ -186,7 +186,7 @@ xcrun stapler validate "Puke-Amp-0.1.0-macOS.pkg"
 This command can be used to increment the version and publish a release:
 
    ```sh
-   NeuralAmpModeler/scripts/prepare-release.sh 0.2.12
+   ./NeuralAmpModeler/scripts/prepare-release.sh 0.2.12
    ```
 
 
