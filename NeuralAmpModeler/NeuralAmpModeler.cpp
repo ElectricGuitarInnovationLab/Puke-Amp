@@ -18,6 +18,8 @@
 #include "architecture.hpp"
 
 #include "NeuralAmpModelerControls.h"
+#include "GUITrace.h"
+#include "IPlugPaths.h"
 #include "UpdateChecker.h"
 
 using namespace iplug;
@@ -120,11 +122,23 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     auto scaleFactor = 1.0f;
 #endif
 
-    return MakeGraphics(*this, PLUG_WIDTH, PLUG_HEIGHT, PLUG_FPS, scaleFactor);
+    auto* graphics = MakeGraphics(*this, PLUG_WIDTH, PLUG_HEIGHT, PLUG_FPS, scaleFactor);
+#if defined(OS_MAC) && defined(VST3_API)
+    graphics->SetScaleConstraints(static_cast<float>(PLUG_MIN_WIDTH) / PLUG_WIDTH,
+                                  static_cast<float>(PLUG_MAX_WIDTH) / PLUG_WIDTH);
+#endif
+    return graphics;
   };
 
   mLayoutFunc = [&](IGraphics* pGraphics) {
+    // This is a fixed logical layout. Rescaling must never append another set
+    // of controls (including the full-window modal pages and their children).
+    if (pGraphics->NControls())
+      return;
+    pGraphics->SetLayoutOnResize(false);
+#if !defined(OS_MAC) || !defined(VST3_API)
     pGraphics->AttachCornerResizer(EUIResizerMode::Scale, false);
+#endif
     pGraphics->AttachTextEntryControl();
     pGraphics->EnableMouseOver(true);
     pGraphics->EnableTooltips(true);
@@ -243,7 +257,8 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     };
 
     pGraphics->AttachBackground(BACKGROUND_FN);
-    pGraphics->AttachControl(new IBitmapControl(b, linesBitmap));
+    pGraphics->GetControl(0)->SetIgnoreMouse(true);
+    pGraphics->AttachControl(new IBitmapControl(b, linesBitmap))->SetIgnoreMouse(true);
     const auto logoArea = titleArea.GetFromLeft(44.0f).GetCentredInside(44.0f, 44.0f);
     pGraphics->AttachControl(new ISVGButtonControl(
       logoArea, [](IControl* pCaller) {
@@ -705,9 +720,56 @@ int NeuralAmpModeler::UnserializeState(const IByteChunk& chunk, int startPos)
   }
 }
 
+#if defined(OS_MAC) && defined(VST3_API)
+void NeuralAmpModeler::OnParentWindowResize(int width, int height)
+{
+  PukeAmpGUITrace("plugin onSize requested=%dx%d ui=%p editor-before=%dx%d", width, height,
+                  static_cast<void*>(GetUI()), GetEditorWidth(), GetEditorHeight());
+  if (width <= 0 || height <= 0)
+    return;
+
+  // VST3/NSView sizes are Cocoa points, not backing pixels. Keep the host
+  // content size distinct from the uniformly fitted native child view.
+  ConstrainEditorResize(width, height);
+  SetEditorSize(width, height);
+  if (auto* graphics = GetUI())
+  {
+    const float scale = std::min(static_cast<float>(width) / PLUG_WIDTH,
+                                 static_cast<float>(height) / PLUG_HEIGHT);
+    // Mouse coordinates are divided by this same draw scale in IGraphicsMac.
+    // Do not notify resizeView from inside the host's onSize callback.
+    graphics->Resize(PLUG_WIDTH, PLUG_HEIGHT, scale, false);
+    PukeAmpGUITrace("plugin onSize applied editor=%dx%d logical=%dx%d draw-scale=%.4f window=%dx%d controls=%d",
+                    GetEditorWidth(), GetEditorHeight(), graphics->Width(), graphics->Height(),
+                    graphics->GetDrawScale(), graphics->WindowWidth(), graphics->WindowHeight(),
+                    graphics->NControls());
+  }
+}
+
+bool NeuralAmpModeler::EditorResizeFromUI(int width, int height, bool needsPlatformResize)
+{
+  // This editor is host-sized. In particular, SetScreenScale/OpenWindow must
+  // not request the fitted child size as a new host size: that would discard
+  // the unused space and can re-enter onSize during a Retina transition.
+  PukeAmpGUITrace("plugin ui-resize-request=%dx%d platform=%d editor-kept=%dx%d", width, height,
+                  needsPlatformResize, GetEditorWidth(), GetEditorHeight());
+  return true;
+}
+#endif
+
 void NeuralAmpModeler::OnUIOpen()
 {
   Plugin::OnUIOpen();
+#if defined(OS_MAC) && defined(VST3_API)
+  WDL_String resourcePath;
+  BundleResourcePath(resourcePath, GetBundleID());
+  PukeAmpGUITrace("plugin ui-open version=%s ui=%p editor=%dx%d", PLUG_VERSION_STR,
+                  static_cast<void*>(GetUI()), GetEditorWidth(), GetEditorHeight());
+  PukeAmpGUITrace("plugin bundle-id=%s resources=%s", GetBundleID(), resourcePath.Get());
+  // Also handles onSize before attachment and close/reopen with a retained
+  // host size; IGEditorDelegate may have restored an older child draw scale.
+  OnParentWindowResize(GetEditorWidth(), GetEditorHeight());
+#endif
   _StartUpdateCheck();
 
   if (mNAMPath.GetLength())

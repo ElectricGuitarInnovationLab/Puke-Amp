@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>PukeAmp</string>
 	<key>CFBundleGetInfoString</key>
-	<string>Puke Amp v0.1.0 Copyright 2022 Steven Atkinson</string>
+	<string>Puke Amp v0.2.12 Copyright 2022 Steven Atkinson</string>
 	<key>CFBundleIdentifier</key>
 	<string>org.theRATLAB.aax.PukeAmp</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -17,11 +17,11 @@
 	<key>CFBundlePackageType</key>
 	<string>TDMw</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>0.2.12</string>
 	<key>CFBundleSignature</key>
 	<string>PTul</string>
 	<key>CFBundleVersion</key>
-	<string>0.1.0</string>
+	<string>0.2.12</string>
 	<key>CSResourcesFileMapped</key>
 	<true/>
 	<key>LSMinimumSystemVersion</key>

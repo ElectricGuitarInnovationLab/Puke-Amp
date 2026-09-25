@@ -255,6 +255,10 @@ public:
   bool SerializeState(iplug::IByteChunk& chunk) const override;
   int UnserializeState(const iplug::IByteChunk& chunk, int startPos) override;
   void OnUIOpen() override;
+#if defined(OS_MAC) && defined(VST3_API)
+  void OnParentWindowResize(int width, int height) override;
+  bool EditorResizeFromUI(int width, int height, bool needsPlatformResize) override;
+#endif
   bool OnHostRequestingSupportedViewConfiguration(int width, int height) override { return true; }
 
   void OnParamChange(int paramIdx) override;
