@@ -20,6 +20,7 @@
 #include "NeuralAmpModelerControls.h"
 #include "GUITrace.h"
 #include "IPlugPaths.h"
+#include "UserLibrary.h"
 #include "UpdateChecker.h"
 
 using namespace iplug;
@@ -528,6 +529,12 @@ void NeuralAmpModeler::OnReset()
 
 void NeuralAmpModeler::OnIdle()
 {
+  if (auto* graphics = GetUI())
+  {
+    for (const auto tag : {kCtrlTagModelFileBrowser, kCtrlTagIRFileBrowser, kCtrlTagFXFileBrowser})
+      if (auto* browser = dynamic_cast<NAMFileBrowserControl*>(graphics->GetControlWithTag(tag)))
+        browser->PollImport();
+  }
   mInputSender.TransmitData(*this);
   mOutputSender.TransmitData(*this);
 
@@ -623,6 +630,18 @@ bool NeuralAmpModeler::LoadPresetFile(const char* filePath, const char* bundledM
 
 WDL_String NeuralAmpModeler::_EncodePresetAssetPath(const WDL_String& path) const
 {
+  if (CStringHasContents(path.Get()))
+  {
+    try
+    {
+      const auto encoded = nam_library::UserLibrary().Encode(std::filesystem::u8path(path.Get()));
+      if (encoded.rfind("library://", 0) == 0)
+        return WDL_String(encoded.c_str());
+    }
+    catch (const std::filesystem::filesystem_error&)
+    {
+    }
+  }
   if (!mSerializePortablePresetPaths || !CStringHasContents(path.Get()) || !CStringHasContents(mPresetModelsRoot.Get()))
     return path;
 
@@ -644,6 +663,19 @@ WDL_String NeuralAmpModeler::_ResolvePresetAssetPath(const std::string& storedPa
 {
   if (storedPath.empty())
     return WDL_String("");
+
+  if (storedPath.rfind("library://", 0) == 0)
+  {
+    try
+    {
+      return WDL_String(nam_library::PathString(nam_library::UserLibrary().Resolve(storedPath)).c_str());
+    }
+    catch (const std::exception&)
+    {
+      // Leave invalid references unresolved; the normal loader reports the failure.
+      return WDL_String(storedPath.c_str());
+    }
+  }
 
   const std::string portablePrefix = "bundle://";
   try

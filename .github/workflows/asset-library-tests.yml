@@ -1,0 +1,19 @@
+name: Asset library tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Configure
+        run: cmake -S NeuralAmpModeler/tests -B /tmp/nam-library-tests -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build /tmp/nam-library-tests --parallel 2
+      - name: Test
+        run: ctest --test-dir /tmp/nam-library-tests --output-on-failure

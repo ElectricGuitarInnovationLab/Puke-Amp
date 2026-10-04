@@ -1,14 +1,18 @@
 #pragma once
 
+#include <chrono>
 #include <cmath> // std::round
 #include <cstdio> // FILE, fclose
 #include <filesystem> // std::filesystem
 #include <fstream> // std::ifstream, std::ofstream
+#include <future>
 #include <sstream> // std::stringstream
 #include <unordered_map> // std::unordered_map
 #include <vector> // std::vector
 #include "IControls.h"
 #include "IPlugPaths.h"
+#include "UserLibrary.h"
+#include "AssetValidation.h"
 #include "json.hpp"
 
 #ifdef OS_WIN
@@ -308,7 +312,7 @@ public:
                         IFileDialogCompletionHandlerFunc ch, const IVStyle& style, const ISVG& loadSVG,
                         const ISVG& clearSVG, const ISVG& leftSVG, const ISVG& rightSVG, const IBitmap& bitmap,
                         const ISVG& globeSVG, const char* getButtonLabel, const char* getButtonURL,
-                        const char* bundledModelsSubdirectory, bool scanRecursively = false)
+                        const char* bundledModelsSubdirectory, bool scanRecursively = true)
   : IDirBrowseControlBase(bounds, fileExtension, false, scanRecursively)
   , mClearMsgTag(clearMsgTag)
   , mDefaultLabelStr(labelStr)
@@ -332,21 +336,59 @@ public:
 
   void OnPopupMenuSelection(IPopupMenu* pSelectedMenu, int valIdx) override
   {
-    if (pSelectedMenu)
+    mMenuOpen = false;
+    if (!pSelectedMenu || !pSelectedMenu->GetChosenItem())
+      return;
+    auto* item = pSelectedMenu->GetChosenItem();
+    if (item == mImportFileItem)
+      PromptImport(false);
+    else if (item == mImportFolderItem)
+      PromptImport(true);
+    else if (item == mRevealLibraryItem)
     {
-      IPopupMenu::Item* pItem = pSelectedMenu->GetChosenItem();
-
-      if (pItem)
+      try
       {
-        mSelectedItemIndex = mItems.Find(pItem);
-        LoadFileAtCurrentIndex();
+        const auto folder = nam_library::UserLibrary().Category(LibraryCategory());
+        std::filesystem::create_directories(folder);
+        WDL_String path(nam_library::PathString(folder).c_str());
+        GetUI()->RevealPathInExplorerOrFinder(path);
+      }
+      catch (const std::exception& error)
+      {
+        GetUI()->ShowMessageBox(error.what(), "User library", kMB_OK);
       }
     }
+    else if (item == mRefreshLibraryItem)
+      RefreshLibraryMenu();
+    else
+    {
+      mSelectedItemIndex = mItems.Find(item);
+      LoadFileAtCurrentIndex();
+    }
+  }
+
+  void PollImport()
+  {
+    if (mMenuOpen || !mImport.valid() || mImport.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+      return;
+    const auto result = mImport.get();
+    RefreshLibraryMenu();
+    std::ostringstream message;
+    message << "Imported " << result.imported << " file(s) into My Library.";
+    if (result.skipped)
+      message << "\nSkipped " << result.skipped << " file(s) with other extensions.";
+    if (!result.errors.empty())
+    {
+      message << "\n\nCould not import " << result.errors.size() << " item(s):";
+      for (const auto& error : result.errors)
+        message << "\n" << error;
+    }
+    GetUI()->ShowMessageBox(message.str().c_str(), "Library import", kMB_OK);
   }
 
   void OnAttached() override
   {
-    AddBundledModelsPath();
+    RefreshLibraryMenu();
 
     auto prevFileFunc = [&](IControl* pCaller) {
       const auto nItems = NItems();
@@ -405,26 +447,17 @@ public:
     auto clearFileFunc = [&](IControl* pCaller) {
       pCaller->GetDelegate()->SendArbitraryMsgFromUI(mClearMsgTag);
       mFileNameControl->SetLabelAndTooltip(mDefaultLabelStr.Get());
+      mCurrentFile.clear();
       SetBrowserState(NAMBrowserState::Empty);
       // FIXME disabling output mode...
       //      pCaller->GetUI()->GetControlWithTag(kCtrlTagOutputMode)->SetDisabled(false);
     };
 
-    auto chooseFileFunc = [&, loadFileFunc](IControl* pCaller) {
-      if (NItems() == 0)
-      {
-        loadFileFunc(pCaller);
-      }
-      else
-      {
-        CheckSelectedItem();
-
-        if (!mMainMenu.HasSubMenus())
-        {
-          mMainMenu.SetChosenItemIdx(mSelectedItemIndex);
-        }
-        pCaller->GetUI()->CreatePopupMenu(*this, mMainMenu, pCaller->GetRECT());
-      }
+    auto chooseFileFunc = [&](IControl* pCaller) {
+      RefreshLibraryMenu();
+      CheckSelectedItem();
+      mMenuOpen = true;
+      pCaller->GetUI()->CreatePopupMenu(*this, mMainMenu, pCaller->GetRECT());
     };
 
     IRECT padded = mRECT.GetPadded(-6.f).GetHPadded(-2.f);
@@ -460,6 +493,7 @@ public:
   {
     if (mFileNameControl)
       mFileNameControl->SetLabelAndTooltip(mDefaultLabelStr.Get());
+    mCurrentFile.clear();
     mSelectedItemIndex = -1;
     SetBrowserState(NAMBrowserState::Empty);
   }
@@ -497,24 +531,9 @@ public:
       case kMsgTagLoadedModel:
       case kMsgTagLoadedIR:
       {
-        WDL_String fileName, directory;
-        fileName.Set(reinterpret_cast<const char*>(pData));
-        directory.Set(reinterpret_cast<const char*>(pData));
-        directory.remove_filepart(true);
-
-        ClearPathList();
-        const bool hasBundledModels = AddBundledModelsPath(false);
-        SetupMenu();
-        SetSelectedFile(fileName.Get());
-
-        if (mSelectedItemIndex == -1)
-        {
-          ClearPathList();
-          AddBundledModelsPath(false);
-          AddPath(directory.Get(), hasBundledModels ? "Imported" : "");
-          SetupMenu();
-          SetSelectedFile(fileName.Get());
-        }
+        WDL_String fileName(reinterpret_cast<const char*>(pData));
+        mCurrentFile = fileName.Get();
+        RefreshLibraryMenu();
         mFileNameControl->SetLabelAndTooltipEllipsizing(fileName);
         SetBrowserState(NAMBrowserState::Loaded);
       }
@@ -524,6 +543,71 @@ public:
   }
 
 private:
+  std::string LibraryCategory() const
+  {
+    const std::string bundled = mBundledModelsSubdirectory.Get();
+    return bundled == "Amp" ? "Amps" : bundled == "FX" ? "Pedals" : "IRs";
+  }
+
+  void RefreshLibraryMenu()
+  {
+    ClearPathList();
+    AddBundledModelsPath(false);
+    const auto directory = nam_library::UserLibrary().Category(LibraryCategory());
+    AddPath(nam_library::PathString(directory).c_str(), "My Library");
+    SetupMenu();
+    SetSelectedFile(mCurrentFile.c_str());
+    // Keep the existing ability to audition files without importing them.
+    if (!mCurrentFile.empty() && mSelectedItemIndex == -1)
+    {
+      const auto parent = std::filesystem::u8path(mCurrentFile).parent_path();
+      AddPath(nam_library::PathString(parent).c_str(), "Current Folder");
+      SetupMenu();
+      SetSelectedFile(mCurrentFile.c_str());
+    }
+    mMainMenu.AddSeparator();
+    mImportFileItem = mMainMenu.AddItem("Import File…");
+    mImportFolderItem = mMainMenu.AddItem("Import Folder…");
+    mRevealLibraryItem = mMainMenu.AddItem("Reveal Library Folder");
+    mRefreshLibraryItem = mMainMenu.AddItem("Refresh");
+  }
+
+  void PromptImport(bool folder)
+  {
+    if (mImport.valid())
+    {
+      GetUI()->ShowMessageBox("An import is still running. Its results will appear when it finishes.",
+                             "Library import", kMB_OK);
+      return;
+    }
+    WDL_String file, path;
+    GetSelectedFileDirectory(path);
+    auto completion = [this, folder](const WDL_String& file, const WDL_String& directory) {
+      const auto source = std::string(folder ? directory.Get() : file.Get());
+      if (source.empty() || mImport.valid())
+        return;
+      const auto library = nam_library::UserLibrary();
+      const auto category = LibraryCategory();
+      const auto extension = std::string(mExtension.Get());
+      // Capture values only: the worker never touches the UI or active DSP.
+      try
+      {
+        mImport = std::async(std::launch::async, [library, category, extension, source] {
+          return library.Import(std::filesystem::u8path(source), category, extension,
+                                extension == "nam" ? nam_library::ValidateModel : nam_library::ValidateIR);
+        });
+      }
+      catch (const std::exception& error)
+      {
+        GetUI()->ShowMessageBox(error.what(), "Could not start import", kMB_OK);
+      }
+    };
+    if (folder)
+      GetUI()->PromptForDirectory(path, completion);
+    else
+      GetUI()->PromptForFile(file, path, EFileAction::Open, mExtension.Get(), completion);
+  }
+
   static bool DirectoryExists(const WDL_String& path)
   {
     if (!CStringHasContents(path.Get()))
@@ -582,7 +666,7 @@ private:
     if (!ResolveBundledModelsPath(mBundledModelsPath))
       return false;
 
-    AddPath(mBundledModelsPath.Get(), "Bundled");
+    AddPath(mBundledModelsPath.Get(), "Included");
     if (setupMenu)
       SetupMenu();
     return true;
@@ -615,6 +699,13 @@ private:
     }
   }
 
+  bool mMenuOpen = false;
+  std::string mCurrentFile;
+  std::future<nam_library::ImportResult> mImport;
+  IPopupMenu::Item* mImportFileItem = nullptr;
+  IPopupMenu::Item* mImportFolderItem = nullptr;
+  IPopupMenu::Item* mRevealLibraryItem = nullptr;
+  IPopupMenu::Item* mRefreshLibraryItem = nullptr;
   WDL_String mDefaultLabelStr;
   IFileDialogCompletionHandlerFunc mCompletionHandlerFunc;
   NAMFileNameControl* mFileNameControl = nullptr;

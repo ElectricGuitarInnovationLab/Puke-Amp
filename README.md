@@ -21,9 +21,39 @@ The included amplifier models and impulse responses were created by the RATLab a
 
 ## Pedal FX chain
 
-Put pedal capture `.nam` files under `Models/FX` to make them available in the pedal browser. Click the pedal icon in the upper-left of the plugin to open the FX-chain screen. The chain supports up to eight ordered slots before the main amp model and IR. Each slot has bypass, input and output trim, and an independent three-band EQ. Pedal model CPU/Quality is fixed at `1.0`.
+Use **Import File…** or **Import Folder…** in the pedal menu to add your own `.nam` captures to **My Library**. Click the pedal icon in the upper-left of the plugin to open the FX-chain screen. The chain supports up to eight ordered slots before the main amp model and IR. Each slot has bypass, input and output trim, and an independent three-band EQ. Pedal model CPU/Quality is fixed at `1.0`.
 
 The arrow buttons move the selected pedal in the chain, and the global FX CHAIN switch bypasses all pedal slots. Pedal paths, order, bypass states, trims, and EQ settings are included in DAW state and `.fxp` presets.
+
+## Importing amps, pedals, and IRs
+
+The amp, pedal, and cabinet IR menus show **Included** assets alongside **My Library**.
+Choose **Import File…** for a single file or **Import Folder…** for a collection.
+Imports copy files into your user library and leave the originals untouched. Folder
+imports preserve the selected folder and its subfolders. Amp and pedal menus accept
+`.nam` models; the IR menu accepts mono `.wav` files supported by the plugin.
+Import a model from the menu where you want it to appear.
+
+Imports run in the background and validate each file before adding it. A completion
+message reports imported files, skipped extensions, and errors. Duplicate names get
+numbered suffixes rather than overwriting existing files. Importing does not change
+the currently playing sound; select an imported item from the menu to load it.
+
+The library is shared by plugin instances and the standalone app, persists across
+restarts, and is separate from installed assets:
+
+- macOS: `~/Library/Application Support/Puke Amp/Library`
+- Windows: `%LOCALAPPDATA%\Puke Amp\Library`
+
+Each library contains `Amps`, `Pedals`, and `IRs` folders. **Reveal Library Folder**
+opens the current category for organization or backup. Menus refresh when opened;
+**Refresh** also rescans them. The existing file-open icon still lets you audition
+an external file without copying it into the library.
+
+DAW sessions and presets store library-relative asset references. To move to another
+computer, copy the library into that computer's user-library location as well as
+copying your sessions/presets. Moving or deleting individual library assets can break
+saved references. Linked external collections are not part of this initial release.
 
 ## Presets
 
@@ -44,7 +74,8 @@ User presets are stored by default in:
 - Windows: `%LOCALAPPDATA%\Puke Amp\Presets`
 
 Factory presets use portable references for amp, pedal, and IR files beneath the
-bundled `Models` directory. External assets retain their absolute paths. Puke Amp
+bundled `Models` directory. User-library assets use library-relative references;
+other external assets retain their absolute paths. Puke Amp
 also remaps missing bundled paths from older `.fxp` files when their `Models/...`
 suffix matches an asset in the current installation.
 
