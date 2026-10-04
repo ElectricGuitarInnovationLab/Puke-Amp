@@ -1,6 +1,6 @@
 # Puke Amp
 
-**Puke Amp** is an open-source guitar amplifier modeling plugin and asset library developed by [the RATLab](http://theratlab.org) as part of [Puke Studio](http://puke.studio) and adapted from the excellent [Neural Amp Modeler](https://github.com/sdatkinson/neural-amp-modeler) project by Steven Atkinson.
+**Puke Amp** is an open-source guitar amplifier modeling plugin and asset library developed by [the RATLab](http://theratlab.org) as part of [Puke Studio](http://puke.studio) and adapted from the excellent [Neural Amp Modeler](https://github.com/sdatkinson/neural-amp-modeler) project by Steven Atkinson. Puke Amp has substantially diverged from the upstream codebase, and is now an independent repository.
 
 This repository contains:
 
