@@ -1,6 +1,8 @@
 NeuralAmpModeler changelog
 https://github.com/sdatkinson/NeuralAmpModelerPlugin
 
+10/04/2026 - v0.2.15
+
 09/25/2026 - v0.2.14
 
 09/25/2026 - v0.2.13
