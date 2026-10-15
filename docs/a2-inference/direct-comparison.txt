@@ -1,0 +1,1 @@
+438272 samples; max absolute difference=0; tolerance=0

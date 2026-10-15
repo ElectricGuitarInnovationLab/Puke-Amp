@@ -1,0 +1,20 @@
+--- a/NAM/wavenet/a2_fast.cpp
++++ b/NAM/wavenet/a2_fast.cpp
+@@ -576,7 +576,7 @@
+       const int tap_base = tap_base_phys(K - 1 - k);
+       Eigen::Map<const MatCC> W(&L.conv_w[static_cast<size_t>(k) * Channels * Channels]);
+       Eigen::Map<const MatCDyn> input_block(&L.history[static_cast<size_t>(tap_base) * Channels], Channels, num_frames);
+-      ztile.noalias() += W * input_block;
++      ztile.noalias() += W.lazyProduct(input_block);
+     }
+ 
+     // Post-conv: bias, mixin, LeakyReLU, head_sum, 1x1 residual — all block ops.
+@@ -584,7 +584,7 @@
+     ztile.noalias() += mixin_vec * cond_row; // rank-1 outer product
+     ztile = (ztile.array() < 0.0f).select(ztile.array() * kLeakySlope, ztile.array());
+     hsum_block += ztile;
+-    lin_block.noalias() += l1x1_mat * ztile; // 8x8 × 8xN GEMM
++    lin_block.noalias() += l1x1_mat.lazyProduct(ztile); // 8x8 × 8xN GEMM
+     lin_block.colwise() += l1x1_b_vec;
+   }
+ }
