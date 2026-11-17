@@ -21,13 +21,22 @@ if not exist "%PROJECT_DIR%\..\iPlug2\Dependencies\IPlug\VST3_SDK" (
   exit /b 1
 )
 
-msbuild "%PROJECT_DIR%\NeuralAmpModeler.sln" /t:NeuralAmpModeler-vst3 /p:Configuration=Release /p:Platform=x64 /m /nologo
+set "BUILD_TARGET=NeuralAmpModeler-vst3"
+set "EXPORT_PROPERTIES="
+if /i "%~1"=="--bundle-only" (
+  set "BUILD_TARGET=NeuralAmpModeler-vst3:Rebuild"
+  set "EXPORT_PROPERTIES=/p:VST3_32_PATH= /p:VST3_64_PATH="
+)
+msbuild "%PROJECT_DIR%\NeuralAmpModeler.sln" /t:%BUILD_TARGET% /p:Configuration=Release /p:Platform=x64 %EXPORT_PROPERTIES% /m /nologo
 if errorlevel 1 exit /b 1
 
 if not exist "%BUNDLE_PATH%" (
   echo error: build succeeded but "%BUNDLE_PATH%" was not created.
   exit /b 1
 )
+
+REM Exporters stage all resources before signing; preserve the default release path.
+if /i "%~1"=="--bundle-only" exit /b 0
 
 if defined WINDOWS_SIGNTOOL_PATH (
   if not defined WINDOWS_CERTIFICATE_PATH (

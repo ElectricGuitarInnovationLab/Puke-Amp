@@ -16,6 +16,21 @@ trap 'report_error "${LINENO}" "${BASH_COMMAND}"' ERR
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(cd "${script_dir}/.." && pwd)"
 repository_dir="$(cd "${project_dir}/.." && pwd)"
+bundle_only=0
+build_archs=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --bundle-only) bundle_only=1; shift ;;
+    --arch)
+      case "${2:-}" in
+        universal) build_archs=("ARCHS=arm64 x86_64" ONLY_ACTIVE_ARCH=NO) ;;
+        arm64|x86_64) build_archs=("ARCHS=$2" ONLY_ACTIVE_ARCH=NO) ;;
+        *) echo 'error: --arch requires universal, arm64, or x86_64.' >&2; exit 2 ;;
+      esac
+      shift 2 ;;
+    *) echo "error: unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
 build_root="${project_dir}/build-vst3/mac"
 products_dir="${build_root}/products"
 plugin_path="${products_dir}/Puke Amp.vst3"
@@ -67,11 +82,18 @@ xcodebuild \
   "CONFIGURATION_BUILD_DIR=${products_dir}" \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
+  ${build_archs[@]+"${build_archs[@]}"} \
   build
 
 if [[ ! -d "${plugin_path}" ]]; then
   echo "error: build succeeded but ${plugin_path} was not created." >&2
   exit 1
+fi
+
+# The exporter stages resources and performs release signing itself.
+if [[ "${bundle_only}" == 1 ]]; then
+  echo "Built ${plugin_path}"
+  exit 0
 fi
 
 # Release packages must contain a Developer ID-signed plug-in. Local builds use

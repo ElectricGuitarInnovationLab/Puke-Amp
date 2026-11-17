@@ -4,6 +4,7 @@
 # Generated build output
 **/build-*/
 /Build/
+/dist/puke-installer-assets/
 **/build-vst3/
 
 xcuserdata

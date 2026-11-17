@@ -9,6 +9,7 @@
     <EXTRA_TRACER_DEFS />
     <PDB_FILE>$(SolutionDir)build-win\pdbs\$(TargetName)_$(Platform).pdb</PDB_FILE>
     <BUILD_DIR>$(SolutionDir)build-win</BUILD_DIR>
+    <PUKE_VERSION_RESOURCE_DIR>$(SolutionDir)build-win\version\$(ProjectName)\$(Platform)\$(Configuration)</PUKE_VERSION_RESOURCE_DIR>
     <CREATE_BUNDLE_SCRIPT>$(IPLUG2_ROOT)\Scripts\create_bundle.bat</CREATE_BUNDLE_SCRIPT>
   </PropertyGroup>
   <ImportGroup Label="PropertySheets">
@@ -18,6 +19,9 @@
     <TargetName>$(BINARY_NAME)</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(PUKE_VERSION_RESOURCE_DIR);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
     <ClCompile>
       <AdditionalIncludeDirectories>$(SolutionDir)dsp;$(IPLUG2_ROOT)\..\eigen;$(EXTRA_INC_PATHS);$(IPLUG_INC_PATHS);$(IGRAPHICS_INC_PATHS);$(GLAD_GL2_PATHS);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>$(EXTRA_ALL_DEFS);%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -30,7 +34,7 @@
       <Command>CALL "$(SolutionDir)scripts\postbuild-win.bat" "$(TargetExt)" "$(BINARY_NAME)" "$(Platform)" "$(TargetPath)" "$(VST3_32_PATH)" "$(VST3_64_PATH)" "$(AAX_32_PATH)" "$(AAX_64_PATH)" "$(BUILD_DIR)" "$(VST_ICON)" "$(AAX_ICON)" "$(CREATE_BUNDLE_SCRIPT)"</Command>
     </PostBuildEvent>
     <PreBuildEvent>
-      <Command>CALL "$(SolutionDir)scripts\prebuild-win.bat" "$(TargetExt)" "$(BINARY_NAME)" "$(Platform)" "$(TargetPath)" "$(OutDir)"</Command>
+      <Command>CALL "$(SolutionDir)scripts\prebuild-win.bat" "$(TargetExt)" "$(BINARY_NAME)" "$(Platform)" "$(TargetPath)" "$(OutDir)" "$(PUKE_VERSION_RESOURCE_DIR)"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

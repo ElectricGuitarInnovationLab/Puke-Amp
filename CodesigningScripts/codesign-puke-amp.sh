@@ -18,6 +18,11 @@ if [[ -f "${script_dir}/signing.env" ]]; then
   source "${script_dir}/signing.env"
 fi
 
+if [[ "${REQUIRE_DEVELOPER_ID:-0}" == 1 && "${IDENTITY}" != 'Developer ID Application: '* ]]; then
+  echo 'error: installer asset exports require a Developer ID Application identity (IDENTITY); ad-hoc signing is forbidden.' >&2
+  exit 1
+fi
+
 for command_name in codesign ditto security xcrun; do
   if ! command -v "${command_name}" >/dev/null 2>&1; then
     echo "error: required command not found: ${command_name}" >&2
@@ -96,6 +101,9 @@ fi
 
 echo "🔍 Verifying codesign..."
 codesign --verify --deep --strict --verbose=2 "${PLUGIN_BUNDLE}"
+if [[ "${REQUIRE_DEVELOPER_ID:-0}" == 1 ]]; then
+  codesign --verify --strict -R '=anchor apple generic and certificate leaf[field.1.2.840.113635.100.6.1.13] exists' "${PLUGIN_BUNDLE}"
+fi
 
 echo "📦 Creating zip for notarization..."
 ditto -c -k --keepParent "${PLUGIN_BUNDLE}" "${NOTARIZE_ZIP}"
@@ -108,6 +116,7 @@ xcrun notarytool submit "$NOTARIZE_ZIP" \
 echo "📎 Stapling ticket to VST3..."
 xcrun stapler staple -v "${PLUGIN_BUNDLE}"
 xcrun stapler validate -v "${PLUGIN_BUNDLE}"
+codesign --verify --deep --strict "${PLUGIN_BUNDLE}"
 
 echo "📦 Creating stapled zip for distribution..."
 ditto -c -k --keepParent "${PLUGIN_BUNDLE}" "${FINAL_ZIP}"

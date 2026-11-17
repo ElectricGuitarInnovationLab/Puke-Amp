@@ -227,9 +227,12 @@ END
 // Version
 //
 
+#include "..\config.h"
+#include "PukeAmpVersion.h"
+
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,0,1,0
- PRODUCTVERSION 0,0,1,0
+ FILEVERSION PUKE_FILE_VERSION
+ PRODUCTVERSION PUKE_FILE_VERSION
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -244,8 +247,8 @@ BEGIN
     BEGIN
         BLOCK "040004e4"
         BEGIN
-            VALUE "FileVersion", "0.0.1"
-            VALUE "ProductVersion", "0.0.1"
+            VALUE "FileVersion", PLUG_VERSION_STR
+            VALUE "ProductVersion", PLUG_VERSION_STR
             VALUE "FileDescription", "NeuralAmpModeler"
             VALUE "InternalName", "NeuralAmpModeler"
             VALUE "ProductName", "NeuralAmpModeler"

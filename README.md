@@ -326,3 +326,16 @@ The included .nam models and impulse responses were independently created by the
 Puke Amp, the RATLab, and the Puke Studio project are not affiliated with, endorsed by, sponsored by, or associated with any amplifier, speaker, or equipment manufacturer.
 
 All trademarks, trade names, and product names are the property of their respective owners.
+
+### Exporting prebuilt assets for Puke's installer
+
+Use the dedicated [installer asset export commands](NeuralAmpModeler/installer/PUKE_INSTALLER_ASSETS.md)
+to create release-signed VST3 ZIPs and manifests in
+`dist/puke-installer-assets/packaging/vendor/puke-amp/`. On the signing Mac:
+
+```sh
+./NeuralAmpModeler/scripts/export-puke-installer-assets.sh --arch universal
+```
+
+On Windows, use `NeuralAmpModeler\scripts\export-puke-installer-assets.ps1 -Architecture x64`
+from Developer PowerShell with the documented signing credentials configured.
