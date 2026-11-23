@@ -13,6 +13,14 @@ if [[ ! -d "${iplug2_dir}/.git" && ! -f "${iplug2_dir}/.git" ]]; then
   exit 1
 fi
 
+resize_patch="${project_dir}/patches/iplug2-editor-resize.patch"
+if git -C "${iplug2_dir}" apply --reverse --check "${resize_patch}" 2>/dev/null; then
+  echo "iPlug2 editor resize patch already applied."
+else
+  git -C "${iplug2_dir}" apply "${resize_patch}"
+  echo "Applied iPlug2 editor resize patch."
+fi
+
 if grep -q "Cocoa owns backing density" "${iplug2_dir}/IPlug/VST3/IPlugVST3_View.h" \
   && grep -q "updateBackingScale" "${iplug2_dir}/IGraphics/Platforms/IGraphicsMac_view.h"; then
   echo "iPlug2 macOS Retina VST3 patch already applied."

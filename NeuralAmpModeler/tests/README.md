@@ -1,10 +1,18 @@
 Run the library and real-loader tests with a C++20 compiler and standard library:
 
 ```sh
+bash NeuralAmpModeler/scripts/apply-iplug2-patches.sh
 cmake -S NeuralAmpModeler/tests -B /tmp/nam-library-tests -DCMAKE_BUILD_TYPE=Debug
 cmake --build /tmp/nam-library-tests --parallel 2
 ctest --test-dir /tmp/nam-library-tests --output-on-failure
 ```
+
+The editor resize test also compiles an override against the real iPlug2 base
+class, ensuring a clean checkout has the required virtual resize hook. Both
+native build scripts apply `patches/iplug2-editor-resize.patch` before compiling;
+apply it before direct IDE builds too (the Bash command above works in Git Bash).
+Removing `override` alone would leave host resize calls using the base class's
+rectangular limits instead of the plugin's aspect-ratio constraint.
 
 The cabinet catalog tests cover all bundled WAVs and graphics references, both
 documented example mappings, snapping, omitted distances, duplicate captures,

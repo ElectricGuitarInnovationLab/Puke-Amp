@@ -1,6 +1,18 @@
 #include <cassert>
 #include <cmath>
 #include "../EditorSize.h"
+#include "IPlugEditorDelegate.h"
+
+// Compile against the real framework API: an unpatched dependency must fail
+// here, rather than letting helper-only tests miss a broken plugin override.
+class ResizeOverrideCheck : public iplug::IEditorDelegate
+{
+public:
+  bool ConstrainEditorResize(int& width, int& height) const override
+  {
+    return nam_ui::ConstrainEditorSize(width, height, GetEditorWidth(), GetEditorHeight());
+  }
+};
 
 int main()
 {

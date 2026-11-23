@@ -9,6 +9,9 @@ add_executable(editor_size_test editor_size_test.cpp)
 add_test(NAME editor_size COMMAND editor_size_test)
 
 get_filename_component(REPOSITORY_ROOT "../.." ABSOLUTE)
+target_include_directories(editor_size_test SYSTEM PRIVATE
+                           "${REPOSITORY_ROOT}/iPlug2/IPlug"
+                           "${REPOSITORY_ROOT}/iPlug2/WDL")
 add_executable(asset_library_test asset_library_test.cpp)
 target_link_libraries(asset_library_test PRIVATE Threads::Threads)
 add_test(NAME asset_library COMMAND asset_library_test)

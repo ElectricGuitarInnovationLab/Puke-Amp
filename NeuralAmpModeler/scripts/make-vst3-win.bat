@@ -21,6 +21,14 @@ if not exist "%PROJECT_DIR%\..\iPlug2\Dependencies\IPlug\VST3_SDK" (
   exit /b 1
 )
 
+REM Host resize checks must dispatch to the plugin's aspect-ratio override.
+REM Keep this patch tracked in the parent repository, not only in the submodule.
+git -C "%PROJECT_DIR%\..\iPlug2" apply --reverse --check "%PROJECT_DIR%\patches\iplug2-editor-resize.patch" >nul 2>nul
+if errorlevel 1 (
+  git -C "%PROJECT_DIR%\..\iPlug2" apply "%PROJECT_DIR%\patches\iplug2-editor-resize.patch"
+  if errorlevel 1 exit /b 1
+)
+
 set "BUILD_TARGET=NeuralAmpModeler-vst3"
 set "EXPORT_PROPERTIES="
 if /i "%~1"=="--bundle-only" (
