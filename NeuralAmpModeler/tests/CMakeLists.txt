@@ -5,6 +5,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Threads REQUIRED)
 enable_testing()
 
+add_executable(editor_size_test editor_size_test.cpp)
+add_test(NAME editor_size COMMAND editor_size_test)
+
 get_filename_component(REPOSITORY_ROOT "../.." ABSOLUTE)
 add_executable(asset_library_test asset_library_test.cpp)
 target_link_libraries(asset_library_test PRIVATE Threads::Threads)
@@ -33,7 +36,7 @@ add_test(NAME asset_validation COMMAND asset_validation_test
          "${AMP_FIXTURE}" "${PEDAL_FIXTURE}" "${IR_FIXTURE}")
 
 # Assertions are the test oracle, including in release builds.
-foreach(target asset_library_test asset_validation_test cabinet_catalog_test)
+foreach(target asset_library_test asset_validation_test cabinet_catalog_test editor_size_test)
   if(MSVC)
     target_compile_options(${target} PRIVATE /UNDEBUG)
     target_compile_definitions(${target} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)

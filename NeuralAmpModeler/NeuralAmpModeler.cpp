@@ -20,6 +20,7 @@
 #include "NeuralAmpModelerControls.h"
 #include "CabinetPageControl.h"
 #include "GUITrace.h"
+#include "EditorSize.h"
 #include "IPlugPaths.h"
 #include "UserLibrary.h"
 #include "UpdateChecker.h"
@@ -98,10 +99,8 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
 #endif
 
     auto* graphics = MakeGraphics(*this, PLUG_WIDTH, PLUG_HEIGHT, PLUG_FPS, scaleFactor);
-#if defined(OS_MAC) && defined(VST3_API)
     graphics->SetScaleConstraints(static_cast<float>(PLUG_MIN_WIDTH) / PLUG_WIDTH,
                                   static_cast<float>(PLUG_MAX_WIDTH) / PLUG_WIDTH);
-#endif
     return graphics;
   };
 
@@ -699,6 +698,11 @@ int NeuralAmpModeler::UnserializeState(const IByteChunk& chunk, int startPos)
   }
 }
 
+bool NeuralAmpModeler::ConstrainEditorResize(int& width, int& height) const
+{
+  return nam_ui::ConstrainEditorSize(width, height, GetEditorWidth(), GetEditorHeight());
+}
+
 #if defined(OS_MAC) && defined(VST3_API)
 void NeuralAmpModeler::OnParentWindowResize(int width, int height)
 {
@@ -707,14 +711,16 @@ void NeuralAmpModeler::OnParentWindowResize(int width, int height)
   if (width <= 0 || height <= 0)
     return;
 
-  // VST3/NSView sizes are Cocoa points, not backing pixels. Keep the host
-  // content size distinct from the uniformly fitted native child view.
+  // VST3/NSView sizes are Cocoa points, not backing pixels. The host's
+  // checkSizeConstraint callback uses the same aspect-ratio constraint.
   ConstrainEditorResize(width, height);
   SetEditorSize(width, height);
   if (auto* graphics = GetUI())
   {
-    const float scale = std::min(static_cast<float>(width) / PLUG_WIDTH,
-                                 static_cast<float>(height) / PLUG_HEIGHT);
+    // Round upward by one float ULP to avoid truncating an exact window size
+    // one pixel short when IGraphics converts the scaled dimensions to ints.
+    const float scale = std::nextafter(static_cast<float>(width) / PLUG_WIDTH,
+                                      static_cast<float>(PLUG_MAX_WIDTH));
     // Mouse coordinates are divided by this same draw scale in IGraphicsMac.
     // Do not notify resizeView from inside the host's onSize callback.
     graphics->Resize(PLUG_WIDTH, PLUG_HEIGHT, scale, false);
@@ -728,8 +734,8 @@ void NeuralAmpModeler::OnParentWindowResize(int width, int height)
 bool NeuralAmpModeler::EditorResizeFromUI(int width, int height, bool needsPlatformResize)
 {
   // This editor is host-sized. In particular, SetScreenScale/OpenWindow must
-  // not request the fitted child size as a new host size: that would discard
-  // the unused space and can re-enter onSize during a Retina transition.
+  // not request a new host size: that can re-enter onSize during a Retina
+  // transition. Host resize negotiation happens in ConstrainEditorResize.
   PukeAmpGUITrace("plugin ui-resize-request=%dx%d platform=%d editor-kept=%dx%d", width, height,
                   needsPlatformResize, GetEditorWidth(), GetEditorHeight());
   return true;

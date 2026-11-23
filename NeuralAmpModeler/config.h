@@ -32,7 +32,7 @@
 #define PLUG_HEIGHT 400
 #define PLUG_FPS 60
 #define PLUG_SHARED_RESOURCES 0
-// The macOS VST3 editor fits its fixed artwork into the host's content area.
+// The macOS VST3 host resizes the editor within the fixed 3:2 aspect ratio.
 #if defined(__APPLE__) && defined(VST3_API)
 #define PLUG_HOST_RESIZE 1
 #else

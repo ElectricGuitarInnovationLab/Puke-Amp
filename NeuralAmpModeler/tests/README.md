@@ -27,6 +27,12 @@ folder import is running, keep a menu open and verify completion waits until it 
 
 Shared appearance and control smoke test (macOS/Windows):
 
+- Resize from horizontal, vertical, and corner edges in a macOS VST3 host.
+  Verify the window stays at 3:2 between 300×200 and 2400×1600, with no gray
+  margins, and that controls and microphone placement remain aligned. Repeat
+  with each page open, then close/reopen the editor and move between Retina and
+  standard displays. In other formats, verify the corner grip scales all pages
+  proportionally within the same limits.
 - Open **Pedals**, **Settings**, and **Cabinet + mic...**, then close each page.
   Verify header buttons do not overlap page controls or intercept **Close**.
 - Check knob dragging, mouse wheel, double-click reset, and numeric value entry
