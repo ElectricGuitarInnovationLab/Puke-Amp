@@ -43,8 +43,8 @@ public:
 
   void Draw(IGraphics& g) override
   {
-    const IColor muted(255, 170, 175, 182);
-    g.FillRect(IColor(255, 24, 26, 30), mRECT);
+    const auto muted = PluginColors::MUTED;
+    g.FillRect(PluginColors::BACKGROUND, mRECT);
     Text(g, "CABINET & MICROPHONE", Box(24, 16, 500, 48), 20.f);
     Button(g, CloseBounds(), "Close");
     Button(g, LibraryBounds(), "My IRs / import...");
@@ -73,7 +73,7 @@ public:
     }
 
     const auto stage = StageBounds();
-    g.FillRoundRect(IColor(255, 34, 37, 42), stage, 6.f);
+    g.FillRoundRect(PluginColors::PANEL, stage, 6.f);
     g.PathClipRegion(stage);
     DrawArtwork(g, mCabinetBitmap, cabinet.image, OriginX(), OriginY());
     const auto color = PluginColors::NAM_THEMECOLOR;
@@ -401,12 +401,11 @@ private:
   }
   static void Text(IGraphics& g, const char* text, const IRECT& bounds, float size, const IColor& color = COLOR_WHITE)
   {
-    g.DrawText(IText(size, color, "Roboto-Regular"), text, bounds);
+    g.DrawText(nam_ui::Text(size, color), text, bounds);
   }
   static void Button(IGraphics& g, const IRECT& bounds, const char* label, float size = 12.f)
   {
-    g.FillRoundRect(IColor(255, 48, 52, 58), bounds, 4.f);
-    Text(g, label, bounds.GetHPadded(-8), size);
+    nam_ui::DrawButton(g, bounds, label, false, size);
   }
 
   nam_cabinet::Catalog mCatalog;

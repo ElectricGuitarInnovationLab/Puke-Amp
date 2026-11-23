@@ -32,7 +32,7 @@ current five-inch range). Editor resizing scales the entire page together.
 import, refresh, and reveal. The main window's file icon still loads external WAVs.
 Custom IRs remain usable even if they have no placement metadata; the page labels
 them as custom rather than claiming a cabinet position. **Clear IR** removes the
-current IR. The speaker icon in the main window remains the cabinet bypass switch.
+current IR. The **Enabled** toggle beside **CABINET** in the main window controls cabinet bypass.
 Presets and DAW sessions continue saving the WAV path in the existing format.
 
 ## Adding a cabinet or microphone

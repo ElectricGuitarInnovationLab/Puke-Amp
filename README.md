@@ -21,9 +21,9 @@ The included amplifier models and impulse responses were created by the RATLab a
 
 ## Pedal FX chain
 
-Use **Import File…** or **Import Folder…** in the pedal menu to add your own `.nam` captures to **My Library**. Click the pedal icon in the upper-left of the plugin to open the FX-chain screen. The chain supports up to eight ordered slots before the main amp model and IR. Each slot has bypass, input and output trim, and an independent three-band EQ. Pedal model CPU/Quality is fixed at `1.0`.
+Use **Import File…** or **Import Folder…** in the pedal menu to add your own `.nam` captures to **My Library**. Click **Pedals** in the plugin header to open the FX-chain screen. The chain supports up to eight ordered slots before the main amp model and IR. Each slot has bypass, input and output trim, and an independent three-band EQ. Pedal model CPU/Quality is fixed at `1.0`.
 
-The arrow buttons move the selected pedal in the chain, and the global FX CHAIN switch bypasses all pedal slots. Pedal paths, order, bypass states, trims, and EQ settings are included in DAW state and `.fxp` presets.
+The arrow buttons move the selected pedal in the chain, and **Pedal enabled** toggles its bypass. Purple pedal icons indicate loaded slots; the outlined slot is selected. Pedal paths, order, bypass states, trims, and EQ settings are included in DAW state and `.fxp` presets.
 
 ## Cabinet and microphone placement
 

@@ -25,6 +25,22 @@ navigation works with the amp/pedal arrow buttons, and that failed imports leave
 sound unchanged. Reveal the library, add a subfolder, and verify Refresh. While a
 folder import is running, keep a menu open and verify completion waits until it closes.
 
+Shared appearance and control smoke test (macOS/Windows):
+
+- Open **Pedals**, **Settings**, and **Cabinet + mic...**, then close each page.
+  Verify header buttons do not overlap page controls or intercept **Close**.
+- Check knob dragging, mouse wheel, double-click reset, and numeric value entry
+  on the amplifier and pedal pages. Check Gate, EQ, cabinet, and pedal toggles
+  and confirm host automation still updates the controls.
+- Load and select multiple pedal slots; verify loaded icons are purple and the
+  selected slot has a purple outline. Move, bypass, and remove pedals.
+- Check input calibration editing and output-mode radio buttons in **Settings**,
+  including unavailable options for models without calibration metadata.
+- Open CPU/Quality for a slimmable model, adjust its value, and dismiss by clicking
+  outside the card. Check input/output meter levels and clipping indicators.
+- Check popup submenus, scrolling in long libraries, disabled states, and hover
+  contrast. Resize the editor and check text, icons, and controls at high DPI.
+
 Cabinet page smoke test (macOS/Windows):
 
 - Open **Cabinet + mic...** with no IR loaded; verify opening alone does not load

@@ -10,6 +10,7 @@
 #include <unordered_map> // std::unordered_map
 #include <vector> // std::vector
 #include "IControls.h"
+#include "UITheme.h"
 #include "IPlugPaths.h"
 #include "UserLibrary.h"
 #include "AssetValidation.h"
@@ -21,8 +22,6 @@
 #endif
 
 #define PLUG() static_cast<PLUG_CLASS_NAME*>(GetDelegate())
-#define NAM_KNOB_HEIGHT 120.0f
-#define NAM_SWTICH_HEIGHT 50.0f
 
 using namespace iplug;
 using namespace igraphics;
@@ -33,12 +32,35 @@ enum class NAMBrowserState
   Loaded // when file loaded, show "Clear" button
 };
 
-// Where the corner button on the plugin (settings, close settings) goes
-// :param rect: Rect for the whole plugin's UI
-IRECT CornerButtonArea(const IRECT& rect)
+// Noninteractive flat surfaces used by every page.
+class NAMPanelControl : public IControl
 {
-  const auto mainArea = rect.GetPadded(-20);
-  return mainArea.GetFromTRHC(50, 50).GetCentredInside(20, 20);
+public:
+  NAMPanelControl(const IRECT& bounds, const IColor& color = PluginColors::PANEL, float radius = 6.f)
+  : IControl(bounds), mColor(color), mRadius(radius) { SetIgnoreMouse(true); }
+  void Draw(IGraphics& g) override { g.FillRoundRect(mColor, mRECT, mRadius, &mBlend); }
+private:
+  IColor mColor;
+  float mRadius;
+};
+
+class NAMTextButtonControl : public IButtonControlBase
+{
+public:
+  NAMTextButtonControl(const IRECT& bounds, const char* label, IActionFunction action)
+  : IButtonControlBase(bounds, action), mLabel(label) {}
+  void OnMouseDown(float x, float y, const IMouseMod& mod) override
+  {
+    IButtonControlBase::OnMouseDown(x, y, mod);
+    SetValue(0.);
+    SetDirty(false);
+  }
+  void Draw(IGraphics& g) override
+  {
+    nam_ui::DrawButton(g, mRECT, mLabel.c_str(), mMouseIsOver, 12.f, &mBlend);
+  }
+private:
+  std::string mLabel;
 };
 
 class NAMSquareButtonControl : public ISVGButtonControl
@@ -51,42 +73,26 @@ public:
 
   void Draw(IGraphics& g) override
   {
-    if (mMouseIsOver)
-      g.FillRoundRect(PluginColors::MOUSEOVER, mRECT, 2.f);
-
-    ISVGButtonControl::Draw(g);
-  }
-};
-
-class NAMCircleButtonControl : public ISVGButtonControl
-{
-public:
-  NAMCircleButtonControl(const IRECT& bounds, IActionFunction af, const ISVG& svg)
-  : ISVGButtonControl(bounds, af, svg, svg)
-  {
-  }
-
-  void Draw(IGraphics& g) override
-  {
-    if (mMouseIsOver)
-      g.FillEllipse(PluginColors::MOUSEOVER, mRECT);
-
-    ISVGButtonControl::Draw(g);
+    g.FillRoundRect(mMouseIsOver ? PluginColors::MOUSEOVER : PluginColors::SURFACE, mRECT, 4.f, &mBlend);
+    const auto icon = mRECT.GetCentredInside(std::min(20.f, mRECT.W() - 4.f), std::min(20.f, mRECT.H() - 4.f));
+    g.DrawSVG(GetValue() > 0.5 ? mOnSVG : mOffSVG, icon, &mBlend, &PluginColors::TEXT, &PluginColors::TEXT);
   }
 };
 
 class NAMEffectSlotButtonControl : public NAMSquareButtonControl
 {
 public:
-  NAMEffectSlotButtonControl(const IRECT& bounds, IActionFunction action, const ISVG& offSVG, const ISVG& onSVG)
+  NAMEffectSlotButtonControl(const IRECT& bounds, IActionFunction action, const ISVG& offSVG, const ISVG& onSVG, int number)
   : NAMSquareButtonControl(bounds, action, offSVG)
   , mEmptySVG(offSVG)
   , mLoadedSVG(onSVG)
+  , mNumber(number)
   {
   }
 
   void SetLoaded(bool loaded)
   {
+    mLoaded = loaded;
     const ISVG& svg = loaded ? mLoadedSVG : mEmptySVG;
     mOffSVG = svg;
     mOnSVG = svg;
@@ -101,14 +107,21 @@ public:
 
   void Draw(IGraphics& g) override
   {
-    NAMSquareButtonControl::Draw(g);
+    g.FillRoundRect(mMouseIsOver ? PluginColors::MOUSEOVER : PluginColors::SURFACE, mRECT, 4.f, &mBlend);
+    const auto icon = mRECT.GetFromLeft(30.f).GetCentredInside(18.f, 18.f);
+    const auto& iconColor = mLoaded ? PluginColors::NAM_THEMECOLOR : PluginColors::MUTED;
+    g.DrawSVG(mOffSVG, icon, &mBlend, &iconColor, &iconColor);
+    g.DrawText(nam_ui::Text(12.f, mSelected ? PluginColors::TEXT : PluginColors::MUTED),
+               std::to_string(mNumber).c_str(), mRECT.GetFromRight(20.f), &mBlend);
     if (mSelected)
-      g.DrawRoundRect(PluginColors::NAM_THEMECOLOR, mRECT, 2.f, nullptr, 1.5f);
+      g.DrawRoundRect(PluginColors::NAM_THEMECOLOR, mRECT, 4.f, nullptr, 1.5f);
   }
 
 private:
   ISVG mEmptySVG, mLoadedSVG;
+  bool mLoaded = false;
   bool mSelected = false;
+  int mNumber;
 };
 
 /// Full-window dim layer; click dismisses (used for Slim overlay).
@@ -121,11 +134,18 @@ public:
   {
   }
 
-  void Draw(IGraphics& g) override { g.FillRect(COLOR_BLACK.WithOpacity(0.45f), mRECT); }
+  void Draw(IGraphics& g) override
+  {
+    g.FillRect(COLOR_BLACK.WithOpacity(0.65f), mRECT);
+    const auto card = mRECT.GetCentredInside(220.f, 210.f);
+    g.FillRoundRect(PluginColors::PANEL, card, 6.f);
+    g.DrawText(nam_ui::Text(14.f), "CPU / QUALITY", card.GetFromTop(40.f));
+    g.DrawText(nam_ui::Text(11.f, PluginColors::MUTED), "Click outside to close", card.GetFromBottom(30.f));
+  }
 
   void OnMouseDown(float x, float y, const IMouseMod& mod) override
   {
-    if (mDismiss)
+    if (mDismiss && !mRECT.GetCentredInside(220.f, 210.f).Contains(x, y))
       mDismiss(this);
   }
 
@@ -133,122 +153,45 @@ private:
   IActionFunction mDismiss;
 };
 
-class NAMKnobControl : public IVKnobControl, public IBitmapBase
+class NAMKnobControl : public IVKnobControl
 {
 public:
-  NAMKnobControl(const IRECT& bounds, int paramIdx, const char* label, const IVStyle& style, IBitmap bitmap)
-  : IVKnobControl(bounds, paramIdx, label, style, true)
-  , IBitmapBase(bitmap)
-  {
-    mInnerPointerFrac = 0.55;
-  }
-
-  void OnRescale() override { mBitmap = GetUI()->GetScaledBitmap(mBitmap); }
+  NAMKnobControl(const IRECT& bounds, int paramIdx, const char* label, const IVStyle& style)
+  : IVKnobControl(bounds, paramIdx, label, style, true) {}
 
   void DrawWidget(IGraphics& g) override
   {
-    float widgetRadius = GetRadius() * 0.73;
-    auto knobRect = mWidgetBounds.GetCentredInside(mWidgetBounds.W(), mWidgetBounds.W());
-    const float cx = knobRect.MW(), cy = knobRect.MH();
-    const float angle = mAngle1 + (static_cast<float>(GetValue()) * (mAngle2 - mAngle1));
-    DrawIndicatorTrack(g, angle, cx + 0.5, cy, widgetRadius);
-    g.DrawFittedBitmap(mBitmap, knobRect);
-    float data[2][2];
-    RadialPoints(angle, cx, cy, mInnerPointerFrac * widgetRadius, mInnerPointerFrac * widgetRadius, 2, data);
-    g.PathCircle(data[1][0], data[1][1], 3);
-    g.PathFill(IPattern::CreateRadialGradient(data[1][0], data[1][1], 4.0f,
-                                              {{GetColor(mMouseIsOver ? kX3 : kX1), 0.f},
-                                               {GetColor(mMouseIsOver ? kX3 : kX1), 0.8f},
-                                               {COLOR_TRANSPARENT, 1.0f}}),
-               {}, &mBlend);
-    g.DrawCircle(COLOR_BLACK.WithOpacity(0.5f), data[1][0], data[1][1], 3, &mBlend);
+    const float radius = GetRadius() * 0.85f;
+    const float cx = mWidgetBounds.MW(), cy = mWidgetBounds.MH();
+    const float angle = mAngle1 + static_cast<float>(GetValue()) * (mAngle2 - mAngle1);
+    g.DrawArc(PluginColors::SURFACE, cx, cy, radius, mAngle1, mAngle2, &mBlend, 3.f);
+    g.DrawArc(PluginColors::NAM_THEMECOLOR, cx, cy, radius, mAngle1, angle, &mBlend, 3.f);
+    g.FillCircle(mMouseIsOver ? PluginColors::MOUSEOVER : PluginColors::SURFACE, cx, cy, radius - 5.f, &mBlend);
+    g.DrawCircle(PluginColors::BORDER, cx, cy, radius - 5.f, &mBlend, 1.f);
+    g.DrawRadialLine(PluginColors::TEXT, cx, cy, angle, radius * 0.38f, radius * 0.70f, &mBlend, 2.f);
   }
 };
 
-class NAMSwitchControl : public IVSlideSwitchControl, public IBitmapBase
+class NAMSwitchControl : public ISwitchControlBase
 {
 public:
-  NAMSwitchControl(const IRECT& bounds, int paramIdx, const char* label, const IVStyle& style, IBitmap bitmap)
-  : IVSlideSwitchControl(bounds, paramIdx, label,
-                         style.WithRoundness(0.666f)
-                           .WithShowValue(false)
-                           .WithEmboss(true)
-                           .WithShadowOffset(1.5f)
-                           .WithDrawShadows(false)
-                           .WithColor(kFR, COLOR_BLACK)
-                           .WithFrameThickness(0.5f)
-                           .WithWidgetFrac(0.5f)
-                           .WithLabelOrientation(EOrientation::South))
-  , IBitmapBase(bitmap)
+  NAMSwitchControl(const IRECT& bounds, int paramIdx, const char* label)
+  : ISwitchControlBase(bounds, paramIdx), mLabel(label) {}
+
+  void Draw(IGraphics& g) override
   {
+    const bool on = GetValue() > 0.5;
+    const auto track = mRECT.GetFromLeft(30.f).GetCentredInside(30.f, 16.f);
+    g.FillRoundRect(on ? PluginColors::NAM_THEMECOLOR : PluginColors::SURFACE, track, 8.f, &mBlend);
+    if (mMouseIsOver)
+      g.DrawRoundRect(PluginColors::MUTED, track, 8.f, &mBlend);
+    g.FillCircle(on ? PluginColors::TEXT : PluginColors::MUTED,
+                 on ? track.R - 8.f : track.L + 8.f, track.MH(), 5.f, &mBlend);
+    g.DrawText(nam_ui::Text(12.f, on ? PluginColors::TEXT : PluginColors::MUTED, EAlign::Near),
+               mLabel.c_str(), mRECT.GetReducedFromLeft(38.f), &mBlend);
   }
-
-  void DrawWidget(IGraphics& g) override
-  {
-    DrawTrack(g, mWidgetBounds);
-    DrawHandle(g, mHandleBounds);
-  }
-
-  void DrawTrack(IGraphics& g, const IRECT& bounds) override
-  {
-    IRECT handleBounds = GetAdjustedHandleBounds(bounds);
-    handleBounds = IRECT(handleBounds.L, handleBounds.T, handleBounds.R, handleBounds.T + mBitmap.H());
-    IRECT centreBounds = handleBounds.GetPadded(-mStyle.shadowOffset);
-    IRECT shadowBounds = handleBounds.GetTranslated(mStyle.shadowOffset, mStyle.shadowOffset);
-    //    const float contrast = mDisabled ? -GRAYED_ALPHA : 0.f;
-    float cR = 7.f;
-    const float tlr = cR;
-    const float trr = cR;
-    const float blr = cR;
-    const float brr = cR;
-
-    // outer shadow
-    if (mStyle.drawShadows)
-      g.FillRoundRect(GetColor(kSH), shadowBounds, tlr, trr, blr, brr, &mBlend);
-
-    // Embossed style unpressed
-    if (mStyle.emboss)
-    {
-      // Positive light
-      g.FillRoundRect(GetColor(kPR), handleBounds, tlr, trr, blr, brr /*, &blend*/);
-
-      // Negative light
-      g.FillRoundRect(GetColor(kSH), shadowBounds, tlr, trr, blr, brr /*, &blend*/);
-
-      // Fill in foreground
-      g.FillRoundRect(GetValue() > 0.5 ? GetColor(kX1) : COLOR_BLACK, centreBounds, tlr, trr, blr, brr, &mBlend);
-
-      // Shade when hovered
-      if (mMouseIsOver)
-        g.FillRoundRect(GetColor(kHL), centreBounds, tlr, trr, blr, brr, &mBlend);
-    }
-    else
-    {
-      g.FillRoundRect(GetValue() > 0.5 ? GetColor(kX1) : COLOR_BLACK, handleBounds, tlr, trr, blr, brr /*, &blend*/);
-
-      // Shade when hovered
-      if (mMouseIsOver)
-        g.FillRoundRect(GetColor(kHL), handleBounds, tlr, trr, blr, brr, &mBlend);
-    }
-
-    if (mStyle.drawFrame)
-      g.DrawRoundRect(GetColor(kFR), handleBounds, tlr, trr, blr, brr, &mBlend, mStyle.frameThickness);
-  }
-
-  void DrawHandle(IGraphics& g, const IRECT& filledArea) override
-  {
-    IRECT r;
-    if (GetSelectedIdx() == 0)
-    {
-      r = filledArea.GetFromLeft(mBitmap.W());
-    }
-    else
-    {
-      r = filledArea.GetFromRight(mBitmap.W());
-    }
-
-    g.DrawBitmap(mBitmap, r, 0, 0, nullptr);
-  }
+private:
+  std::string mLabel;
 };
 
 class NAMFileNameControl : public IVButtonControl
@@ -257,6 +200,15 @@ public:
   NAMFileNameControl(const IRECT& bounds, const char* label, const IVStyle& style)
   : IVButtonControl(bounds, DefaultClickActionFunc, label, style)
   {
+  }
+
+  void Draw(IGraphics& g) override
+  {
+    if (mMouseIsOver)
+      g.FillRoundRect(PluginColors::MOUSEOVER, mRECT, 4.f, &mBlend);
+    g.PathClipRegion(mRECT);
+    g.DrawText(nam_ui::Text(12.f), GetLabelStr(), mRECT.GetHPadded(-4.f), &mBlend);
+    g.PathClipRegion();
   }
 
   void SetLabelAndTooltip(const char* str)
@@ -310,7 +262,7 @@ class NAMFileBrowserControl : public IDirBrowseControlBase
 public:
   NAMFileBrowserControl(const IRECT& bounds, int clearMsgTag, const char* labelStr, const char* fileExtension,
                         IFileDialogCompletionHandlerFunc ch, const IVStyle& style, const ISVG& loadSVG,
-                        const ISVG& clearSVG, const ISVG& leftSVG, const ISVG& rightSVG, const IBitmap& bitmap,
+                        const ISVG& clearSVG, const ISVG& leftSVG, const ISVG& rightSVG,
                         const ISVG& globeSVG, const char* getButtonLabel, const char* getButtonURL,
                         const char* bundledModelsSubdirectory, bool scanRecursively = true,
                         IActionFunction graphicalOpen = nullptr)
@@ -320,7 +272,6 @@ public:
   , mDefaultLabelStr(labelStr)
   , mCompletionHandlerFunc(ch)
   , mStyle(style.WithColor(kFG, COLOR_TRANSPARENT).WithDrawFrame(false))
-  , mBitmap(bitmap)
   , mLoadSVG(loadSVG)
   , mClearSVG(clearSVG)
   , mLeftSVG(leftSVG)
@@ -334,7 +285,7 @@ public:
     mIgnoreMouse = true;
   }
 
-  void Draw(IGraphics& g) override { g.DrawFittedBitmap(mBitmap, mRECT); }
+  void Draw(IGraphics& g) override { g.FillRoundRect(PluginColors::SURFACE, mRECT, 4.f, &mBlend); }
 
   const std::string& CurrentFile() const { return mCurrentFile; }
 
@@ -752,7 +703,6 @@ private:
   IFileDialogCompletionHandlerFunc mCompletionHandlerFunc;
   NAMFileNameControl* mFileNameControl = nullptr;
   IVStyle mStyle;
-  IBitmap mBitmap;
   ISVG mLoadSVG, mClearSVG, mLeftSVG, mRightSVG, mGlobeSVG;
   int mClearMsgTag;
 
@@ -769,18 +719,17 @@ private:
 class NAMPresetBrowserControl : public IDirBrowseControlBase
 {
 public:
-  NAMPresetBrowserControl(const IRECT& bounds, const IVStyle& style, const IBitmap& bitmap, const ISVG& saveSVG,
+  NAMPresetBrowserControl(const IRECT& bounds, const IVStyle& style, const ISVG& saveSVG,
                           const ISVG& openSVG)
   : IDirBrowseControlBase(bounds, "fxp", false, true)
   , mStyle(style.WithColor(kFG, COLOR_TRANSPARENT).WithDrawFrame(false))
-  , mBitmap(bitmap)
   , mSaveSVG(saveSVG)
   , mOpenSVG(openSVG)
   {
     mIgnoreMouse = true;
   }
 
-  void Draw(IGraphics& g) override { g.DrawFittedBitmap(mBitmap, mRECT); }
+  void Draw(IGraphics& g) override { g.FillRoundRect(PluginColors::SURFACE, mRECT, 4.f, &mBlend); }
 
   void OnAttached() override
   {
@@ -1090,7 +1039,6 @@ private:
   }
 
   IVStyle mStyle;
-  IBitmap mBitmap;
   ISVG mSaveSVG, mOpenSVG;
   NAMFileNameControl* mPresetNameControl = nullptr;
   std::string mBundledModelsRoot;
@@ -1106,43 +1054,30 @@ private:
   std::vector<std::pair<IPopupMenu::Item*, std::string>> mRemoveFolderItems;
 };
 
-class NAMMeterControl : public IVPeakAvgMeterControl<>, public IBitmapBase
+class NAMMeterControl : public IVPeakAvgMeterControl<>
 {
   static constexpr float KMeterMin = -70.0f;
   static constexpr float KMeterMax = -0.01f;
-
 public:
-  NAMMeterControl(const IRECT& bounds, const IBitmap& bitmap, const IVStyle& style)
-  : IVPeakAvgMeterControl<>(bounds, "", style.WithShowValue(false).WithDrawFrame(false).WithWidgetFrac(0.8),
+  NAMMeterControl(const IRECT& bounds, const IVStyle& style)
+  : IVPeakAvgMeterControl<>(bounds, "", style.WithShowValue(false).WithShowLabel(false)
+                              .WithDrawFrame(false).WithWidgetFrac(1.f).WithColor(kX1, PluginColors::TEXT),
                             EDirection::Vertical, {}, 0, KMeterMin, KMeterMax, {})
-  , IBitmapBase(bitmap)
   {
-    SetPeakSize(1.0f);
+    SetPeakSize(2.f);
+    mPeakValues.fill(0.f);
+    SetIgnoreMouse(true);
   }
 
-  void OnRescale() override { mBitmap = GetUI()->GetScaledBitmap(mBitmap); }
-
-  virtual void OnResize() override
+  void DrawBackground(IGraphics& g, const IRECT& r) override
   {
-    SetTargetRECT(MakeRects(mRECT));
-    mWidgetBounds = mWidgetBounds.GetMidHPadded(5).GetVPadded(10);
-    MakeTrackRects(mWidgetBounds);
-    MakeStepRects(mWidgetBounds, mNSteps);
-    SetDirty(false);
+    g.FillRoundRect(PluginColors::BACKGROUND, r, 3.f, &mBlend);
   }
-
-  void DrawBackground(IGraphics& g, const IRECT& r) override { g.DrawFittedBitmap(mBitmap, r); }
 
   void DrawTrackHandle(IGraphics& g, const IRECT& r, int chIdx, bool aboveBaseValue) override
   {
-    if (r.H() > 2)
-      g.FillRect(GetColor(kX1), r, &mBlend);
-  }
-
-  void DrawPeak(IGraphics& g, const IRECT& r, int chIdx, bool aboveBaseValue) override
-  {
-    g.DrawGrid(COLOR_BLACK, mTrackBounds.Get()[chIdx], 10, 2);
-    g.FillRect(GetColor(kX3), r, &mBlend);
+    if (r.H() > 1.f)
+      g.FillRect(PluginColors::NAM_THEMECOLOR, r, &mBlend);
   }
 };
 
@@ -1269,7 +1204,7 @@ public:
     ss << "Normalized";
     if (disable)
     {
-      ss << " [Not supported by model]";
+      ss << " (unavailable)";
     }
     mTabLabels.Get(1)->Set(ss.str().c_str());
   };
@@ -1280,7 +1215,7 @@ public:
     ss << "Calibrated";
     if (disable)
     {
-      ss << " [Not supported by model]";
+      ss << " (unavailable)";
     }
     mTabLabels.Get(2)->Set(ss.str().c_str());
   };
@@ -1289,23 +1224,17 @@ public:
 class NAMFXPageControl : public IContainerBaseWithNamedChildren
 {
 public:
-  NAMFXPageControl(const IRECT& bounds, const IBitmap& background, const IBitmap& fileBackground,
-                   const IBitmap& knobBackground, const IBitmap& switchBitmap, const ISVG& closeSVG,
-                   const ISVG& fileSVG, const ISVG& leftSVG, const ISVG& rightSVG, const ISVG& globeSVG,
-                   const ISVG& addPedalSVG, const ISVG& moveLeftSVG, const ISVG& moveRightSVG,
+  NAMFXPageControl(const IRECT& bounds, const ISVG& closeSVG, const ISVG& fileSVG,
+                   const ISVG& leftSVG, const ISVG& rightSVG, const ISVG& globeSVG,
+                   const ISVG& moveLeftSVG, const ISVG& moveRightSVG,
                    const ISVG& removePedalSVG, const ISVG& effectOffSVG, const ISVG& effectOnSVG,
                    const IVStyle& style)
   : IContainerBaseWithNamedChildren(bounds)
-  , mBackground(background)
-  , mFileBackground(fileBackground)
-  , mKnobBackground(knobBackground)
-  , mSwitchBitmap(switchBitmap)
   , mCloseSVG(closeSVG)
   , mFileSVG(fileSVG)
   , mLeftSVG(leftSVG)
   , mRightSVG(rightSVG)
   , mGlobeSVG(globeSVG)
-  , mAddPedalSVG(addPedalSVG)
   , mMoveLeftSVG(moveLeftSVG)
   , mMoveRightSVG(moveRightSVG)
   , mRemovePedalSVG(removePedalSVG)
@@ -1376,26 +1305,27 @@ public:
   void OnAttached() override
   {
     const auto bounds = GetRECT();
-    const auto content = bounds.GetPadded(-22.f);
-    const auto titleStyle = DEFAULT_STYLE.WithValueText(IText(25, COLOR_WHITE, "Michroma-Regular"))
-                              .WithDrawFrame(false);
-    AddChildControl(new IBitmapControl(bounds, mBackground))->SetIgnoreMouse(true);
-    AddChildControl(new IVLabelControl(content.GetFromTop(42.f), "DRIVE PEDAL FX CHAIN", titleStyle));
-    auto* closeButton = AddChildControl(new NAMSquareButtonControl(
-      CornerButtonArea(bounds).GetScaledAboutCentre(1.4f).GetHShifted(-40.f),
-      [this](IControl*) { HidePage(true); }, mCloseSVG));
-    closeButton->SetTooltip("Close Drive Pedal FX chain");
+    const auto box = [bounds](float l, float t, float r, float b) {
+      return IRECT(bounds.L + l, bounds.T + t, bounds.L + r, bounds.T + b);
+    };
+    AddChildControl(new NAMPanelControl(bounds, PluginColors::BACKGROUND, 0.f));
+    AddChildControl(new NAMPanelControl(box(24, 64, 576, 112)));
+    AddChildControl(new NAMPanelControl(box(24, 174, 576, 306)));
+    AddChildControl(new IVLabelControl(box(24, 16, 500, 48), "DRIVE PEDAL FX CHAIN", nam_ui::LabelStyle(20.f)))
+      ->SetIgnoreMouse(true);
+    AddChildControl(new NAMTextButtonControl(box(510, 20, 576, 46), "Close",
+      [this](IControl*) { HidePage(true); }))->SetTooltip("Close Drive Pedal FX chain");
 
-    auto slotArea = content.GetFromTop(34.f).GetVShifted(48.f);
+    const auto slotArea = box(28, 72, 572, 104);
     for (int slot = 0; slot < kMaxFXSlots; ++slot)
     {
-      auto cell = slotArea.GetGridCell(0, slot, 1, kMaxFXSlots).GetCentredInside(32.f, 32.f);
+      auto cell = slotArea.GetGridCell(0, slot, 1, kMaxFXSlots).GetCentredInside(54.f, 32.f);
       mSlotButtons[slot] = new NAMEffectSlotButtonControl(
-        cell, [this, slot](IControl*) { SelectSlot(slot); }, mEffectOffSVG, mEffectOnSVG);
+        cell, [this, slot](IControl*) { SelectSlot(slot); }, mEffectOffSVG, mEffectOnSVG, slot + 1);
       AddChildControl(mSlotButtons[slot]);
     }
 
-    auto browserArea = content.GetFromTop(34.f).GetVShifted(92.f).GetMidHPadded(235.f);
+    const auto browserArea = box(24, 126, 576, 160);
     auto completion = [this](const WDL_String& fileName, const WDL_String&) {
       if (!fileName.GetLength())
         return;
@@ -1410,25 +1340,24 @@ public:
     };
     mBrowser = new NAMFileBrowserControl(
       browserArea, kMsgTagClearFXModel, "Select pedal model...", "nam", completion, mStyle, mFileSVG,
-      mCloseSVG, mLeftSVG, mRightSVG, mFileBackground, mGlobeSVG, "", "", "FX", true);
+      mCloseSVG, mLeftSVG, mRightSVG, mGlobeSVG, "", "", "FX", true);
     AddChildControl(mBrowser, kCtrlTagFXFileBrowser);
 
-    const auto controlsArea = content.GetFromTop(NAM_KNOB_HEIGHT).GetVShifted(137.f);
+    const auto controlsArea = box(36, 184, 564, 298);
     const char* labels[] = {"INPUT", "OUTPUT", "BASS", "MIDDLE", "TREBLE"};
     const EFXSlotParam offsets[] = {kFXInputOffset, kFXOutputOffset, kFXBassOffset, kFXMidOffset, kFXTrebleOffset};
     for (int i = 0; i < 5; ++i)
     {
       auto area = controlsArea.GetGridCell(0, i, 1, 5).GetPadded(-3.f);
-      mKnobs[i] = new NAMKnobControl(area, FXParamIndex(0, offsets[i]), labels[i], mStyle, mKnobBackground);
+      mKnobs[i] = new NAMKnobControl(area, FXParamIndex(0, offsets[i]), labels[i], mStyle);
       AddChildControl(mKnobs[i]);
     }
 
-    const auto switchesArea = content.GetFromTop(48.f).GetVShifted(269.f);
-    mSlotSwitch = new NAMSwitchControl(switchesArea.GetGridCell(0, 0, 1, 4).GetPadded(-5.f),
-                                       FXParamIndex(0, kFXEnabledOffset), "Off/On", mStyle, mSwitchBitmap);
+    mSlotSwitch = new NAMSwitchControl(box(24, 318, 196, 346),
+                                       FXParamIndex(0, kFXEnabledOffset), "Pedal enabled");
     AddChildControl(mSlotSwitch);
 
-    const auto editButtons = switchesArea.GetGridCell(0, 3, 1, 4).GetPadded(-3.f);
+    const auto editButtons = box(440, 316, 576, 350);
     AddChildControl(new NAMSquareButtonControl(editButtons.GetGridCell(0, 0, 1, 3).GetPadded(-2.f),
       [this](IControl*) { if (mSelectedSlot > 0) { PLUG()->MoveFXModel(mSelectedSlot, mSelectedSlot - 1); SelectSlot(mSelectedSlot - 1); } },
       mMoveLeftSVG))->SetTooltip("Move pedal left");
@@ -1439,8 +1368,10 @@ public:
       [this](IControl*) { PLUG()->ClearFXModel(mSelectedSlot); RefreshFromPlugin(); }, mRemovePedalSVG))
       ->SetTooltip("Remove pedal");
 
-    const auto addArea = content.GetFromBottom(32.f).GetFromLeft(150.f);
-    AddChildControl(new NAMSquareButtonControl(addArea, [this](IControl*) {
+    AddChildControl(new IVLabelControl(box(152, 360, 576, 386), "Pedals run before the amp.",
+                                       nam_ui::LabelStyle(12.f, PluginColors::MUTED, EAlign::Near)))
+      ->SetIgnoreMouse(true);
+    AddChildControl(new NAMTextButtonControl(box(24, 360, 136, 386), "Add pedal", [this](IControl*) {
       for (int slot = 0; slot < kMaxFXSlots; ++slot)
       {
         if (!PLUG()->GetFXModelPath(slot).GetLength())
@@ -1449,7 +1380,7 @@ public:
           return;
         }
       }
-    }, mAddPedalSVG))->SetTooltip("Add pedal");
+    }))->SetTooltip("Select the first empty pedal slot");
 
     SelectSlot(0);
   }
@@ -1469,9 +1400,8 @@ private:
     mSlotSwitch->SetValueFromDelegate(PLUG()->GetParam(enabledIdx)->GetNormalized());
   }
 
-  IBitmap mBackground, mFileBackground, mKnobBackground, mSwitchBitmap;
   ISVG mCloseSVG, mFileSVG, mLeftSVG, mRightSVG, mGlobeSVG;
-  ISVG mAddPedalSVG, mMoveLeftSVG, mMoveRightSVG, mRemovePedalSVG, mEffectOffSVG, mEffectOnSVG;
+  ISVG mMoveLeftSVG, mMoveRightSVG, mRemovePedalSVG, mEffectOffSVG, mEffectOnSVG;
   IVStyle mStyle;
   int mSelectedSlot = 0;
   std::array<NAMEffectSlotButtonControl*, kMaxFXSlots> mSlotButtons{};
@@ -1483,17 +1413,9 @@ private:
 class NAMSettingsPageControl : public IContainerBaseWithNamedChildren
 {
 public:
-  NAMSettingsPageControl(const IRECT& bounds, const IBitmap& bitmap, const IBitmap& inputLevelBackgroundBitmap,
-                         const IBitmap& switchBitmap, ISVG closeSVG, ISVG ratLogoSVG,
-                         const IVStyle& style, const IVStyle& radioButtonStyle)
+  NAMSettingsPageControl(const IRECT& bounds, const ISVG& ratLogoSVG, const IVStyle& radioButtonStyle)
   : IContainerBaseWithNamedChildren(bounds)
-  , mAnimationTime(0)
-  , mBitmap(bitmap)
-  , mInputLevelBackgroundBitmap(inputLevelBackgroundBitmap)
-  , mSwitchBitmap(switchBitmap)
-  , mStyle(style)
   , mRadioButtonStyle(radioButtonStyle)
-  , mCloseSVG(closeSVG)
   , mRatLogoSVG(ratLogoSVG)
   {
     mIgnoreMouse = false;
@@ -1519,115 +1441,58 @@ public:
 
   void HideAnimated(bool hide)
   {
-    mWillHide = hide;
-
-    if (hide == false)
-    {
-      mHide = false;
-    }
-    else // hide subcontrols immediately
-    {
-      ForAllChildrenFunc([hide](int childIdx, IControl* pChild) { pChild->Hide(hide); });
-    }
-
-    SetAnimation(
-      [&](IControl* pCaller) {
-        auto progress = static_cast<float>(pCaller->GetAnimationProgress());
-
-        if (mWillHide)
-          SetBlend(IBlend(EBlend::Default, 1.0f - progress));
-        else
-          SetBlend(IBlend(EBlend::Default, progress));
-
-        if (progress > 1.0f)
-        {
-          pCaller->OnEndAnimation();
-          IContainerBase::Hide(mWillHide);
-          GetUI()->SetAllControlsDirty();
-          return;
-        }
-      },
-      mAnimationTime);
-
-    SetDirty(true);
+    IContainerBase::Hide(hide);
+    GetUI()->SetAllControlsDirty();
+    GetUI()->UpdateTooltips();
   }
 
   void OnAttached() override
   {
-    const float pad = 20.0f;
-    const IVStyle titleStyle = DEFAULT_STYLE.WithValueText(IText(30, COLOR_WHITE, "Michroma-Regular"))
-                                 .WithDrawFrame(false)
-                                 .WithShadowOffset(2.f);
-    const auto text = IText(DEFAULT_TEXT_SIZE, EAlign::Center, PluginColors::HELP_TEXT);
-    const auto leftText = text.WithAlign(EAlign::Near);
-    const auto style = mStyle.WithDrawFrame(false).WithValueText(text);
-    const IVStyle leftStyle = style.WithValueText(leftText);
-
-    AddNamedChildControl(new IBitmapControl(GetRECT(), mBitmap), mControlNames.bitmap)->SetIgnoreMouse(true);
-    const auto titleArea = GetRECT().GetPadded(-(pad + 10.0f)).GetFromTop(50.0f);
-    AddNamedChildControl(new IVLabelControl(titleArea, "SETTINGS", titleStyle), mControlNames.title);
-
-    // Attach input/output calibration controls
-    {
-      const float height = NAM_KNOB_HEIGHT + NAM_SWTICH_HEIGHT + 10.0f;
-      const float width = titleArea.W();
-      const auto inputOutputArea = titleArea.GetFromBottom(height).GetTranslated(0.0f, height);
-      const auto inputArea = inputOutputArea.GetFromLeft(0.5f * width);
-      const auto outputArea = inputOutputArea.GetFromRight(0.5f * width);
-
-      const float knobWidth = 87.0f; // HACK based on looking at the main page knobs.
-      const auto inputLevelArea =
-        inputArea.GetFromTop(NAM_KNOB_HEIGHT).GetFromBottom(25.0f).GetMidHPadded(0.5f * knobWidth);
-      const auto inputSwitchArea = inputArea.GetFromBottom(NAM_SWTICH_HEIGHT).GetMidHPadded(0.5f * knobWidth);
-
-      auto* inputLevelControl = AddNamedChildControl(
-        new InputLevelControl(inputLevelArea, kInputCalibrationLevel, mInputLevelBackgroundBitmap, text),
-        mControlNames.inputCalibrationLevel, kCtrlTagInputCalibrationLevel);
-      inputLevelControl->SetTooltip(
-        "The analog level, in dBu RMS, that corresponds to digital level of 0 dBFS peak in the host as its signal "
-        "enters this plugin.");
-      AddNamedChildControl(
-        new NAMSwitchControl(inputSwitchArea, kCalibrateInput, "Calibrate Input", mStyle, mSwitchBitmap),
-        mControlNames.calibrateInput, kCtrlTagCalibrateInput);
-
-      // Same-ish height & width as input controls
-      const auto outputRadioArea = outputArea.GetFromBottom(
-        1.1f * (inputLevelArea.H() + inputSwitchArea.H())); // .GetMidHPadded(0.55f * knobWidth);
-      const float buttonSize = 10.0f;
-      auto* outputModeControl =
-        AddNamedChildControl(new OutputModeControl(outputRadioArea, kOutputMode, mRadioButtonStyle, buttonSize),
-                             mControlNames.outputMode, kCtrlTagOutputMode);
-      outputModeControl->SetTooltip(
-        "How to adjust the level of the output.\nRaw=No adjustment.\nNormalized=Adjust the level so that all models "
-        "are about the same loudness.\nCalibrated=Match the input's digital-analog calibration.");
-    }
-
-    const float halfWidth = PLUG_WIDTH / 2.0f - pad;
-    const auto bottomArea = GetRECT().GetPadded(-pad).GetFromBottom(78.0f);
-    const float lineHeight = 15.0f;
-    const auto ratLogoArea = bottomArea.GetFromLeft(90.0f).GetFromBottom(60.0f);
-    const auto modelInfoArea =
-      bottomArea.GetFromLeft(halfWidth).GetReducedFromLeft(100.0f).GetFromTop(4 * lineHeight);
-    const auto aboutArea = bottomArea.GetFromRight(halfWidth).GetFromTop(5 * lineHeight);
-    auto* ratLogo = AddNamedChildControl(
-      new ISVGButtonControl(
-        ratLogoArea,
-        [](IControl* pCaller) {
-          WDL_String url("https://theratlab.org");
-          pCaller->GetUI()->OpenURL(url.Get());
-        },
-        mRatLogoSVG, mRatLogoSVG),
-      mControlNames.ratLogo);
-    ratLogo->SetTooltip("Visit the RATLab website");
-    AddNamedChildControl(new ModelInfoControl(modelInfoArea, leftStyle), mControlNames.modelInfo);
-    AddNamedChildControl(new AboutControl(aboutArea, leftStyle, leftText), mControlNames.about);
-
-    auto closeAction = [&](IControl* pCaller) {
-      static_cast<NAMSettingsPageControl*>(pCaller->GetParent())->HideAnimated(true);
+    const auto bounds = GetRECT();
+    const auto box = [bounds](float l, float t, float r, float b) {
+      return IRECT(bounds.L + l, bounds.T + t, bounds.L + r, bounds.T + b);
     };
-    AddNamedChildControl(
-      new NAMSquareButtonControl(CornerButtonArea(GetRECT()), closeAction, mCloseSVG), mControlNames.close);
+    AddChildControl(new NAMPanelControl(bounds, PluginColors::BACKGROUND, 0.f));
+    AddChildControl(new NAMPanelControl(box(24, 76, 286, 244)));
+    AddChildControl(new NAMPanelControl(box(298, 76, 576, 244)));
+    AddChildControl(new NAMPanelControl(box(24, 260, 576, 376)));
+    const auto label = [this](const IRECT& area, const char* text, float size, const IColor& color) {
+      AddChildControl(new IVLabelControl(area, text, nam_ui::LabelStyle(size, color, EAlign::Near)))
+        ->SetIgnoreMouse(true);
+    };
+    AddChildControl(new IVLabelControl(box(24, 16, 500, 48), "SETTINGS", nam_ui::LabelStyle(20.f)))
+      ->SetIgnoreMouse(true);
+    label(box(40, 88, 270, 116), "INPUT CALIBRATION", 13.f, PluginColors::TEXT);
+    label(box(40, 124, 270, 146), "0 dBFS input corresponds to", 12.f, PluginColors::MUTED);
+    auto* inputLevelControl = AddNamedChildControl(
+      new InputLevelControl(box(40, 154, 170, 188), kInputCalibrationLevel, nam_ui::Text(16.f)),
+      mControlNames.inputCalibrationLevel, kCtrlTagInputCalibrationLevel);
+    inputLevelControl->SetTooltip(
+      "The analog level, in dBu RMS, that corresponds to digital level of 0 dBFS peak in the host as its signal "
+      "enters this plugin.");
+    AddNamedChildControl(new NAMSwitchControl(box(40, 204, 270, 230), kCalibrateInput, "Calibrate input"),
+                         mControlNames.calibrateInput, kCtrlTagCalibrateInput);
 
+    label(box(314, 88, 560, 116), "OUTPUT MODE", 13.f, PluginColors::TEXT);
+    auto* outputModeControl = AddNamedChildControl(
+      new OutputModeControl(box(314, 126, 560, 228), kOutputMode,
+                            mRadioButtonStyle.WithShowLabel(false).WithValueText(nam_ui::Text(12.f)), 10.f),
+      mControlNames.outputMode, kCtrlTagOutputMode);
+    outputModeControl->SetTooltip(
+      "How to adjust the level of the output.\nRaw=No adjustment.\nNormalized=Adjust the level so that all models "
+      "are about the same loudness.\nCalibrated=Match the input's digital-analog calibration.");
+
+    AddChildControl(new ISVGButtonControl(box(36, 282, 100, 346), [](IControl* pCaller) {
+      pCaller->GetUI()->OpenURL("https://theratlab.org");
+    }, mRatLogoSVG, mRatLogoSVG))->SetTooltip("Visit the RATLab website");
+    AddNamedChildControl(new ModelInfoControl(box(112, 280, 276, 352),
+                                              nam_ui::LabelStyle(11.f, PluginColors::MUTED, EAlign::Near)),
+                         mControlNames.modelInfo);
+    const auto aboutText = nam_ui::Text(10.f, PluginColors::MUTED, EAlign::Near);
+    AddChildControl(new AboutControl(box(298, 278, 564, 358),
+                                    nam_ui::LabelStyle(10.f, PluginColors::MUTED, EAlign::Near), aboutText));
+    AddChildControl(new NAMTextButtonControl(box(510, 20, 576, 46), "Close",
+                                            [this](IControl*) { HideAnimated(true); }));
     OnResize();
   }
 
@@ -1639,44 +1504,29 @@ public:
   };
 
 private:
-  IBitmap mBitmap;
-  IBitmap mInputLevelBackgroundBitmap;
-  IBitmap mSwitchBitmap;
-  IVStyle mStyle;
   IVStyle mRadioButtonStyle;
-  ISVG mCloseSVG, mRatLogoSVG;
-  int mAnimationTime = 200;
-  bool mWillHide = false;
+  ISVG mRatLogoSVG;
 
-  // Names for controls
-  // Make sure that these are all unique and that you use them with AddNamedChildControl
   struct ControlNames
   {
-    const std::string about = "About";
-    const std::string bitmap = "Bitmap";
     const std::string calibrateInput = "CalibrateInput";
-    const std::string close = "Close";
     const std::string inputCalibrationLevel = "InputCalibrationLevel";
     const std::string modelInfo = "ModelInfo";
     const std::string outputMode = "OutputMode";
-    const std::string ratLogo = "RatLogo";
-    const std::string title = "Title";
   } mControlNames;
 
   class InputLevelControl : public IEditableTextControl
   {
   public:
-    InputLevelControl(const IRECT& bounds, int paramIdx, const IBitmap& bitmap, const IText& text = DEFAULT_TEXT,
-                      const IColor& BGColor = DEFAULT_BGCOLOR)
-    : IEditableTextControl(bounds, "", text, BGColor)
-    , mBitmap(bitmap)
+    InputLevelControl(const IRECT& bounds, int paramIdx, const IText& text)
+    : IEditableTextControl(bounds, "", text, COLOR_TRANSPARENT)
     {
       SetParamIdx(paramIdx);
     };
 
     void Draw(IGraphics& g) override
     {
-      g.DrawFittedBitmap(mBitmap, mRECT);
+      g.FillRoundRect(mMouseIsOver ? PluginColors::MOUSEOVER : PluginColors::SURFACE, mRECT, 4.f, &mBlend);
       ITextControl::Draw(g);
     };
 
@@ -1706,7 +1556,6 @@ private:
       return s;
     };
 
-    IBitmap mBitmap;
   };
 
   class AboutControl : public IContainerBase
@@ -1725,13 +1574,13 @@ private:
       buildInfoStr.SetFormatted(100, "Version %s %s %s", verStr.Get(), PLUG()->GetArchStr(),
                                 PLUG()->GetAPIStr());
 
-      AddChildControl(new IURLControl(GetRECT().SubRectVertical(5, 0), "Puke Amp adapted from Neural Amp Modeler",
+      AddChildControl(new IURLControl(GetRECT().SubRectVertical(5, 0), "Puke Amp / Neural Amp Modeler",
                                       "https://www.neuralampmodeler.com", mText, COLOR_TRANSPARENT,
                                       PluginColors::HELP_TEXT_MO, PluginColors::HELP_TEXT_CLICKED));
-      AddChildControl(new IVLabelControl(GetRECT().SubRectVertical(5, 1), "NAM created by Steven Atkinson, adapted by the RATLab", mStyle));
+      AddChildControl(new IVLabelControl(GetRECT().SubRectVertical(5, 1), "NAM by Steven Atkinson / adapted by the RATLab", mStyle));
       AddChildControl(new IVLabelControl(GetRECT().SubRectVertical(5, 2), buildInfoStr.Get(), mStyle));
       AddChildControl(new IURLControl(GetRECT().SubRectVertical(5, 3),
-                                      "Plug-in adapted from Steve Atkinson, Oli Larkin",
+                                      "Plugin by Steven Atkinson & Oli Larkin",
                                       "https://github.com/sdatkinson/NeuralAmpModelerPlugin/graphs/contributors", mText,
                                       COLOR_TRANSPARENT, PluginColors::HELP_TEXT_MO, PluginColors::HELP_TEXT_CLICKED));
       AddChildControl(new ThirdPartyNoticesControl(GetRECT().SubRectVertical(5, 4), mText));
