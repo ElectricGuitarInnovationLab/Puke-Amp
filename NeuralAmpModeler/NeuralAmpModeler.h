@@ -97,6 +97,7 @@ enum ECtrlTags
   kCtrlTagFXPage,
   kCtrlTagFXFileBrowser,
   kCtrlTagPresetBrowser,
+  kCtrlTagCabinetPage,
   kNumCtrlTags
 };
 

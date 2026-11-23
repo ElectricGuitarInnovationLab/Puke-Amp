@@ -18,6 +18,7 @@
 #include "architecture.hpp"
 
 #include "NeuralAmpModelerControls.h"
+#include "CabinetPageControl.h"
 #include "GUITrace.h"
 #include "IPlugPaths.h"
 #include "UserLibrary.h"
@@ -244,7 +245,6 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     auto loadIRCompletionHandler = [&](const WDL_String& fileName, const WDL_String& path) {
       if (fileName.GetLength())
       {
-        mIRPath = fileName;
         const dsp::wav::LoadReturnCode retCode = _StageIR(fileName);
         if (retCode != dsp::wav::LoadReturnCode::SUCCESS)
         {
@@ -280,10 +280,8 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
 
 #ifdef NAM_PICK_DIRECTORY
     const std::string defaultNamFileString = "Select model directory...";
-    const std::string defaultIRString = "Select IR directory...";
 #else
     const std::string defaultNamFileString = "Select model...";
-    const std::string defaultIRString = "Select IR...";
 #endif
     // Getting started page listing additional resources
     const char* const getUrl = "https://www.neuralampmodeler.com/users#comp-marb84o5";
@@ -319,9 +317,11 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     pGraphics->AttachControl(new ISVGSwitchControl(irIconArea, {speakerIconSVG, speakerIconSVG}, kIRToggle))
       ->SetTooltip("Cabinet IR on/off");
     pGraphics->AttachControl(
-      new NAMFileBrowserControl(irArea, kMsgTagClearIR, defaultIRString.c_str(), "wav", loadIRCompletionHandler, style,
+      new NAMFileBrowserControl(irArea, kMsgTagClearIR, "Cabinet + mic...", "wav", loadIRCompletionHandler, style,
                                 fileSVG, crossSVG, leftArrowSVG, rightArrowSVG, fileBackgroundBitmap, globeSVG,
-                                "Get IRs", getUrl, "IR"),
+                                "Get IRs", getUrl, "IR", true, [pGraphics](IControl*) {
+                                  pGraphics->GetControlWithTag(kCtrlTagCabinetPage)->As<NAMCabinetPageControl>()->Open();
+                                }),
       kCtrlTagIRFileBrowser);
     pGraphics->AttachControl(
       new NAMSwitchControl(ngToggleArea, kNoiseGateActive, "Noise Gate", style, switchHandleBitmap));
@@ -361,6 +361,8 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
                                                  crossSVG, ratLogoSVG, style, radioButtonStyle),
                       kCtrlTagSettingsBox)
       ->Hide(true);
+
+    pGraphics->AttachControl(new NAMCabinetPageControl(b, loadIRCompletionHandler), kCtrlTagCabinetPage)->Hide(true);
 
     const auto slimKnobArea = b.GetCentredInside(100.f, NAM_KNOB_HEIGHT + 24.f);
     pGraphics->AttachControl(new NAMSlimOverlayBackdropControl(b, hideSlimOverlay), kCtrlTagSlimOverlayBackdrop)
@@ -819,6 +821,8 @@ void NeuralAmpModeler::OnUIOpen()
     if (mIR == nullptr && mStagedIR == nullptr)
       SendControlMsgFromDelegate(kCtrlTagIRFileBrowser, kMsgTagLoadFailed);
   }
+  else if (GetUI())
+    GetUI()->GetControlWithTag(kCtrlTagIRFileBrowser)->As<NAMFileBrowserControl>()->ClearDisplayedFile();
 
   if (mModel != nullptr)
   {
@@ -1307,6 +1311,7 @@ dsp::wav::LoadReturnCode NeuralAmpModeler::_StageIR(const WDL_String& irPath)
 
   if (wavState == dsp::wav::LoadReturnCode::SUCCESS)
   {
+    mShouldRemoveIR = false;
     mIRPath = irPath;
     SendControlMsgFromDelegate(kCtrlTagIRFileBrowser, kMsgTagLoadedIR, mIRPath.GetLength(), mIRPath.Get());
   }

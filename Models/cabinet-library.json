@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "omitted_grill_inches": 0,
+  "cabinets": [
+    {
+      "id": "orange-ppc112-v30",
+      "name": "Orange PPC112 / Celestion Vintage 30",
+      "filename_prefix": "Orange_Celestion_V30",
+      "image": {
+        "path": "GUI/cabs/ppc112.png",
+        "anchor": [
+          5588,
+          5060
+        ]
+      },
+      "source_pixels_per_inch": 260
+    }
+  ],
+  "microphones": [
+    {
+      "id": "royer-121-front",
+      "name": "Royer 121 (front)",
+      "filename_token": "Royer_front_121",
+      "images": {
+        "0": {
+          "path": "GUI/mics/r121.png",
+          "anchor": [
+            1946,
+            450
+          ]
+        },
+        "45": {
+          "path": "GUI/mics/r121_45.png",
+          "anchor": [
+            1980,
+            430
+          ]
+        }
+      }
+    },
+    {
+      "id": "royer-121-back",
+      "name": "Royer 121 (back)",
+      "filename_token": "Royer_back_121",
+      "images": {
+        "0": {
+          "path": "GUI/mics/r121.png",
+          "anchor": [
+            1946,
+            450
+          ]
+        },
+        "45": {
+          "path": "GUI/mics/r121_45.png",
+          "anchor": [
+            1980,
+            430
+          ]
+        }
+      }
+    },
+    {
+      "id": "sennheiser-e609",
+      "name": "Sennheiser e609",
+      "filename_token": "Sennheiser_609",
+      "images": {
+        "0": {
+          "path": "GUI/mics/e609.png",
+          "anchor": [
+            1946,
+            460
+          ]
+        },
+        "45": {
+          "path": "GUI/mics/e609_45.png",
+          "anchor": [
+            1946,
+            430
+          ]
+        }
+      }
+    },
+    {
+      "id": "sennheiser-md421ii",
+      "name": "Sennheiser MD421-II",
+      "filename_token": "Sennheiser_MD421II(M)",
+      "images": {
+        "0": {
+          "path": "GUI/mics/md421II.png",
+          "anchor": [
+            1946,
+            160
+          ]
+        },
+        "45": {
+          "path": "GUI/mics/md421II_45.png",
+          "anchor": [
+            1910,
+            260
+          ]
+        }
+      }
+    },
+    {
+      "id": "shure-sm57",
+      "name": "Shure SM57",
+      "filename_token": "Shure_SM57",
+      "images": {
+        "0": {
+          "path": "GUI/mics/sm57.png",
+          "anchor": [
+            1946,
+            55
+          ]
+        },
+        "45": {
+          "path": "GUI/mics/sm57_45.png",
+          "anchor": [
+            1880,
+            130
+          ]
+        }
+      }
+    }
+  ]
+}

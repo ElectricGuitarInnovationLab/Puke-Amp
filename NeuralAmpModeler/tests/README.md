@@ -6,6 +6,10 @@ cmake --build /tmp/nam-library-tests --parallel 2
 ctest --test-dir /tmp/nam-library-tests --output-on-failure
 ```
 
+The cabinet catalog tests cover all bundled WAVs and graphics references, both
+documented example mappings, snapping, omitted distances, duplicate captures,
+sparse/fractional positions, and extending the catalog with new equipment.
+
 The filesystem tests cover nested imports, invalid files, extension filtering,
 concurrent name collisions, unchanged originals, UTF-8 names, category isolation,
 reference persistence/relocation, and path traversal rejection. The loader tests
@@ -17,6 +21,26 @@ the three menus; check the completion report and select the new items. Open anot
 plugin instance and the standalone app, then reopen the menus to see the same files.
 Save a DAW session and an FXP, close/reopen the editor and host, and verify recall.
 Verify the file-open icon still auditions external files, that Included/My Library
-navigation works with the arrow buttons, and that failed imports leave the current
+navigation works with the amp/pedal arrow buttons, and that failed imports leave the current
 sound unchanged. Reveal the library, add a subfolder, and verify Refresh. While a
 folder import is running, keep a menu open and verify completion waits until it closes.
+
+Cabinet page smoke test (macOS/Windows):
+
+- Open **Cabinet + mic...** with no IR loaded; verify opening alone does not load
+  a sound. Check all five microphones and both offsets use the corresponding PNG.
+- Click and drag to 0, 1, 2, and 5 inches on both axes. Check exact readouts, capsule
+  anchoring when changing angle, snapping between dots, and that only mouse release
+  changes the sound. Try the two filename examples in `Models/CABINET_LIBRARY.md`.
+- Use arrow keys along each axis. Escape during dragging must cancel the change.
+  Close/reopen and resize the editor; the art should retain its proportions.
+- Save/recall a preset and a DAW session, reopen the editor, and check all three
+  menus and distances. Recall a preset with no IR and confirm the previous IR is
+  cleared from both sound and display. Clear then immediately choose another IR.
+- Load a custom WAV via the file icon and via **My IRs / import...**. Verify the
+  custom indication and that it does not claim a recorded microphone position.
+- Remove a selected WAV after opening the page, try loading it, and verify the
+  prior sound/path/position survive the failure. Restore the WAV afterwards.
+- Temporarily remove the catalog or one referenced graphic, reopen the editor,
+  and verify the unavailable-library screen and working custom IR menu. Restore
+  the resources afterwards. Verify installed VST3 and standalone resource lookup.

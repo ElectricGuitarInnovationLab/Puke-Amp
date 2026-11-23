@@ -89,6 +89,12 @@ void NeuralAmpModeler::_UnserializeApplyConfig(nlohmann::json& config)
     if (_StageIR(mIRPath) != dsp::wav::LoadReturnCode::SUCCESS)
       _RecordPresetLoadError("Cabinet IR could not be loaded: " + std::string(mIRPath.Get()));
   }
+  else
+  {
+    mStagedIR.reset();
+    mShouldRemoveIR = true;
+    SendControlMsgFromDelegate(kCtrlTagIRFileBrowser, kMsgTagClearIR);
+  }
 }
 
 // Unserialize NAM Path, IR path, then named keys

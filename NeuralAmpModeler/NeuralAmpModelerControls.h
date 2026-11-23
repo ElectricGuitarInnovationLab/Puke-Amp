@@ -312,8 +312,10 @@ public:
                         IFileDialogCompletionHandlerFunc ch, const IVStyle& style, const ISVG& loadSVG,
                         const ISVG& clearSVG, const ISVG& leftSVG, const ISVG& rightSVG, const IBitmap& bitmap,
                         const ISVG& globeSVG, const char* getButtonLabel, const char* getButtonURL,
-                        const char* bundledModelsSubdirectory, bool scanRecursively = true)
+                        const char* bundledModelsSubdirectory, bool scanRecursively = true,
+                        IActionFunction graphicalOpen = nullptr)
   : IDirBrowseControlBase(bounds, fileExtension, false, scanRecursively)
+  , mGraphicalOpen(graphicalOpen)
   , mClearMsgTag(clearMsgTag)
   , mDefaultLabelStr(labelStr)
   , mCompletionHandlerFunc(ch)
@@ -333,6 +335,16 @@ public:
   }
 
   void Draw(IGraphics& g) override { g.DrawFittedBitmap(mBitmap, mRECT); }
+
+  const std::string& CurrentFile() const { return mCurrentFile; }
+
+  void OpenLibraryMenu(const IRECT& bounds)
+  {
+    RefreshLibraryMenu();
+    CheckSelectedItem();
+    mMenuOpen = true;
+    GetUI()->CreatePopupMenu(*this, mMainMenu, bounds);
+  }
 
   void OnPopupMenuSelection(IPopupMenu* pSelectedMenu, int valIdx) override
   {
@@ -449,31 +461,35 @@ public:
       mFileNameControl->SetLabelAndTooltip(mDefaultLabelStr.Get());
       mCurrentFile.clear();
       SetBrowserState(NAMBrowserState::Empty);
+      NotifyGraphicalPage(kMsgTagClearIR);
       // FIXME disabling output mode...
       //      pCaller->GetUI()->GetControlWithTag(kCtrlTagOutputMode)->SetDisabled(false);
     };
 
     auto chooseFileFunc = [&](IControl* pCaller) {
-      RefreshLibraryMenu();
-      CheckSelectedItem();
-      mMenuOpen = true;
-      pCaller->GetUI()->CreatePopupMenu(*this, mMainMenu, pCaller->GetRECT());
+      if (mGraphicalOpen)
+        mGraphicalOpen(pCaller);
+      else
+        OpenLibraryMenu(pCaller->GetRECT());
     };
 
     IRECT padded = mRECT.GetPadded(-6.f).GetHPadded(-2.f);
     const auto buttonWidth = padded.H();
     const auto loadFileButtonBounds = padded.ReduceFromLeft(buttonWidth);
     const auto clearAndGetButtonBounds = padded.ReduceFromRight(buttonWidth);
-    const auto leftButtonBounds = padded.ReduceFromLeft(buttonWidth);
-    const auto rightButtonBounds = padded.ReduceFromLeft(buttonWidth);
+    const auto leftButtonBounds = padded.ReduceFromLeft(mGraphicalOpen ? 0.f : buttonWidth);
+    const auto rightButtonBounds = padded.ReduceFromLeft(mGraphicalOpen ? 0.f : buttonWidth);
     const auto fileNameButtonBounds = padded;
 
     AddChildControl(new NAMSquareButtonControl(loadFileButtonBounds, DefaultClickActionFunc, mLoadSVG))
       ->SetAnimationEndActionFunction(loadFileFunc);
-    AddChildControl(new NAMSquareButtonControl(leftButtonBounds, DefaultClickActionFunc, mLeftSVG))
-      ->SetAnimationEndActionFunction(prevFileFunc);
-    AddChildControl(new NAMSquareButtonControl(rightButtonBounds, DefaultClickActionFunc, mRightSVG))
-      ->SetAnimationEndActionFunction(nextFileFunc);
+    if (!mGraphicalOpen)
+    {
+      AddChildControl(new NAMSquareButtonControl(leftButtonBounds, DefaultClickActionFunc, mLeftSVG))
+        ->SetAnimationEndActionFunction(prevFileFunc);
+      AddChildControl(new NAMSquareButtonControl(rightButtonBounds, DefaultClickActionFunc, mRightSVG))
+        ->SetAnimationEndActionFunction(nextFileFunc);
+    }
     AddChildControl(mFileNameControl = new NAMFileNameControl(fileNameButtonBounds, mDefaultLabelStr.Get(), mStyle))
       ->SetAnimationEndActionFunction(chooseFileFunc);
 
@@ -496,6 +512,7 @@ public:
     mCurrentFile.clear();
     mSelectedItemIndex = -1;
     SetBrowserState(NAMBrowserState::Empty);
+    NotifyGraphicalPage(kMsgTagClearIR);
   }
 
   void SetDisplayedFile(const WDL_String& fileName)
@@ -511,7 +528,8 @@ public:
     {
       WDL_String fileName, path;
       GetSelectedFile(fileName);
-      mFileNameControl->SetLabelAndTooltipEllipsizing(fileName);
+      if (!mGraphicalOpen)
+        mFileNameControl->SetLabelAndTooltipEllipsizing(fileName);
       mCompletionHandlerFunc(fileName, path);
     }
   }
@@ -520,9 +538,18 @@ public:
   {
     switch (msgTag)
     {
+      case kMsgTagClearIR:
+        if (mGraphicalOpen)
+          ClearDisplayedFile();
+        break;
       case kMsgTagLoadFailed:
         // Honestly, not sure why I made a big stink of it before. Why not just say it failed and move on? :)
         {
+          if (mGraphicalOpen)
+          {
+            NotifyGraphicalPage(msgTag);
+            break;
+          }
           std::string label(std::string("(FAILED) ") + std::string(mFileNameControl->GetLabelStr()));
           mFileNameControl->SetLabelAndTooltip(label.c_str());
           SetBrowserState(NAMBrowserState::Empty);
@@ -534,7 +561,14 @@ public:
         WDL_String fileName(reinterpret_cast<const char*>(pData));
         mCurrentFile = fileName.Get();
         RefreshLibraryMenu();
-        mFileNameControl->SetLabelAndTooltipEllipsizing(fileName);
+        if (mGraphicalOpen)
+        {
+          mFileNameControl->SetLabelAndTooltip(mDefaultLabelStr.Get());
+          mFileNameControl->SetTooltip(fileName.Get());
+          NotifyGraphicalPage(kMsgTagLoadedIR, dataSize, pData);
+        }
+        else
+          mFileNameControl->SetLabelAndTooltipEllipsizing(fileName);
         SetBrowserState(NAMBrowserState::Loaded);
       }
       break;
@@ -543,6 +577,14 @@ public:
   }
 
 private:
+  void NotifyGraphicalPage(int msgTag, int dataSize = 0, const void* data = nullptr)
+  {
+    if (mGraphicalOpen && GetUI())
+      if (auto* page = GetUI()->GetControlWithTag(kCtrlTagCabinetPage))
+        page->OnMsgFromDelegate(msgTag, dataSize, data);
+  }
+
+  IActionFunction mGraphicalOpen;
   std::string LibraryCategory() const
   {
     const std::string bundled = mBundledModelsSubdirectory.Get();

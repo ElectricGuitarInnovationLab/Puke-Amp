@@ -25,6 +25,19 @@ Use **Import File…** or **Import Folder…** in the pedal menu to add your own
 
 The arrow buttons move the selected pedal in the chain, and the global FX CHAIN switch bypasses all pedal slots. Pedal paths, order, bypass states, trims, and EQ settings are included in DAW state and `.fxp` presets.
 
+## Cabinet and microphone placement
+
+Click **Cabinet + mic...** to choose a speaker, microphone, and 0°/45° offset.
+Drag the microphone or click a position dot; release to load the matching recorded
+IR. Rightward movement changes distance from the speaker center, and downward
+movement changes distance from the grille. Exact distances appear beside the
+display. The current Orange PPC112 / Vintage 30 library offers Royer 121 front/back,
+Sennheiser e609, Sennheiser MD421-II, and Shure SM57 captures at 0, 1, 2, and 5 inches.
+
+Custom IRs and imports are available through **My IRs / import...** on that page.
+See [the cabinet library guide](Models/CABINET_LIBRARY.md) for the filename rules,
+graphics alignment, and how to extend the JSON catalog with new cabinets and mics.
+
 ## Importing amps, pedals, and IRs
 
 The amp, pedal, and cabinet IR menus show **Included** assets alongside **My Library**.
