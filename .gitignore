@@ -20,3 +20,6 @@ mkcert*
 
 NeuralAmpModeler/*.wav
 NeuralAmpModeler/peaks/
+
+# Personal contributor guidance
+/AGENTS.local.md

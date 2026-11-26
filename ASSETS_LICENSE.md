@@ -1,6 +1,6 @@
 # Puke Amp Asset License
 
-The `.nam` models, `.wav` impulse responses, and other audio assets included with Puke Amp (primarily located in `Models/Amp`, `Models/FX`, and `Models/IR`) are licensed under the **Creative Commons Attribution 4.0 International License (CC BY 4.0)**.
+The `.nam` models, `.wav` impulse responses, and other audio assets included with Puke Amp (primarily located in `Models/Amp`, `Models/FX`, and `Models/IR`) were created by [the RATLab](http://theratlab.org) and are licensed under the **Creative Commons Attribution 4.0 International License (CC BY 4.0)**.
 
 https://creativecommons.org/licenses/by/4.0/
 

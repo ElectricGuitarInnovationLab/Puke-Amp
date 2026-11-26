@@ -2,6 +2,8 @@
 
 **Puke Amp** is an open-source guitar amplifier modeling plugin and asset library developed by [the RATLab](http://theratlab.org) as part of [Puke Studio](http://puke.studio) and adapted from the excellent [Neural Amp Modeler](https://github.com/sdatkinson/neural-amp-modeler) project by Steven Atkinson. Puke Amp has substantially diverged from the upstream codebase, and is now an independent repository.
 
+The Puke Amp VST/AU plugin can be downloaded from the releases in this repository. It is also bundled with the installation of [Puke](https://github.com/the-RAT-Lab/Puke), an open-source programming language for creating audio effects, synthesis, and more. For more information about Puke and Puke Amp, visit the [Puke Studio website](https://puke.studio).
+
 This repository contains:
 
 - The Puke Amp plugin source and build configuration based on **iPlug2**.
@@ -17,7 +19,9 @@ The included amplifier models and impulse responses were created by the RATLab a
 >
 > - The **Puke Amp software** is licensed under the GNU Affero General Public License v3.0 (AGPLv3). See `LICENSE`.
 > - Portions of this project are derived from **Neural Amp Modeler**, which is licensed under the MIT License. See `THIRD_PARTY.md`.
-> - The included `.nam` models, `.wav` impulse responses, and other audio assets are licensed separately under **CC BY 4.0**. See `ASSETS_LICENSE.md`.
+> - The included `.nam` models, `.wav` impulse responses, and other audio assets are licensed separately under **CC BY 4.0**. See [ASSETS_LICENSE.md](ASSETS_LICENSE.md) for the asset terms and attribution guidance.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution instructions and [TRADEMARK.md](TRADEMARK.md) for Puke Amp branding guidelines.
 
 ## Pedal FX chain
 
