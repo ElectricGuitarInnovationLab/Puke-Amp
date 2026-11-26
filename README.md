@@ -27,14 +27,15 @@ The arrow buttons move the selected pedal in the chain, and **Pedal enabled** to
 
 ## Cabinet and microphone placement
 
-Click **Cabinet + mic...** to choose a speaker, microphone, and 0°/45° offset.
-Drag the microphone or click a position dot; release to load the matching recorded
-IR. Rightward movement changes distance from the speaker center, and downward
-movement changes distance from the grille. Exact distances appear beside the
-display. The current Orange PPC112 / Vintage 30 library offers Royer 121 front/back,
-Sennheiser e609, Sennheiser MD421-II, and Shure SM57 captures at 0, 1, 2, and 5 inches.
+Click **Cabinet + mics...** to choose a speaker. Select Mic A or Mic B, choose a
+microphone and angle, then drag its capsule to a recorded position. Release to load
+the IR. Both mics feed the output in parallel with independent levels and pans.
+Mic B starts off and has a polarity switch for blending captures.
 
-Custom IRs and imports are available through **My IRs / import...** on that page.
+Rightward movement changes distance from the speaker center, and downward movement
+changes distance from the grille. The Orange PPC112 / Vintage 30 library offers
+Royer 121 front/back, Sennheiser e609, Sennheiser MD421-II, and Shure SM57 captures
+at 0, 1, 2, and 5 inches. Each row can also use a custom WAV from **IR library / import...**.
 See [the cabinet library guide](Models/CABINET_LIBRARY.md) for the filename rules,
 graphics alignment, and how to extend the JSON catalog with new cabinets and mics.
 

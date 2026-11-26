@@ -35,6 +35,10 @@ void NeuralAmpModeler::_UnserializeApplyConfig(nlohmann::json& config)
     // else
     return (iplug::IParam*)nullptr;
   };
+  // Loading a legacy preset over a dual-mic preset must reset all five parameters.
+  if (!config.contains("IRPathB"))
+    for (int i = kMicALevel; i < kNumParams; ++i)
+      config[GetParam(i)->GetName()] = 0.;
   TRACE
   ENTER_PARAMS_MUTEX
   for (auto it = config.begin(); it != config.end(); ++it)
@@ -55,7 +59,6 @@ void NeuralAmpModeler::_UnserializeApplyConfig(nlohmann::json& config)
   LEAVE_PARAMS_MUTEX
 
   mNAMPath = _ResolvePresetAssetPath(static_cast<std::string>(config["NAMPath"]));
-  mIRPath = _ResolvePresetAssetPath(static_cast<std::string>(config["IRPath"]));
 
   for (int slot = 0; slot < kMaxFXSlots; ++slot)
   {
@@ -84,16 +87,18 @@ void NeuralAmpModeler::_UnserializeApplyConfig(nlohmann::json& config)
     if (!error.empty())
       _RecordPresetLoadError("Amp model: " + error);
   }
-  if (mIRPath.GetLength())
+  nam_cabinet::Mixer::Changes paths{
+    _ResolvePresetAssetPath(config.at("IRPath").get<std::string>()).Get(),
+    _ResolvePresetAssetPath(config.value("IRPathB", std::string{})).Get()
+  };
+  for (;;)
   {
-    if (_StageIR(mIRPath) != dsp::wav::LoadReturnCode::SUCCESS)
-      _RecordPresetLoadError("Cabinet IR could not be loaded: " + std::string(mIRPath.Get()));
-  }
-  else
-  {
-    mStagedIR.reset();
-    mShouldRemoveIR = true;
-    SendControlMsgFromDelegate(kCtrlTagIRFileBrowser, kMsgTagClearIR);
+    const auto result = SelectCabinet(paths);
+    if (result.status == nam_cabinet::Mixer::Status::SUCCESS) break;
+    _RecordPresetLoadError(std::string("Cabinet mic ") + (result.slot ? "B" : "A")
+                           + " could not be loaded: " + *paths[result.slot]);
+    // Keep this slot's last playable recording and apply the valid slot (including legacy B off).
+    paths[result.slot] = std::nullopt;
   }
 }
 
@@ -148,36 +153,40 @@ std::vector<std::string> _GetParamNamesFrom_0_7_16()
   return names;
 }
 
-int _GetConfigFrom_0_7_16(const iplug::IByteChunk& chunk, int startPos, nlohmann::json& config)
+int _ReadConfigWithFXSlots(const iplug::IByteChunk& chunk, int startPos, nlohmann::json& config, bool dualMic)
 {
   int pos = startPos;
   WDL_String path;
   pos = chunk.GetStr(path, pos);
+  if (pos < 0) return -1;
   config["NAMPath"] = std::string(path.Get());
   pos = chunk.GetStr(path, pos);
+  if (pos < 0) return -1;
   config["IRPath"] = std::string(path.Get());
+  if (dualMic)
+  {
+    pos = chunk.GetStr(path, pos);
+    if (pos < 0) return -1;
+    config["IRPathB"] = std::string(path.Get());
+  }
   config["FXPaths"] = nlohmann::json::array();
   for (int slot = 0; slot < kMaxFXSlots; ++slot)
   {
     pos = chunk.GetStr(path, pos);
+    if (pos < 0) return -1;
     config["FXPaths"].push_back(std::string(path.Get()));
   }
 
-  const auto names = _GetParamNamesFrom_0_7_16();
+  auto names = _GetParamNamesFrom_0_7_16();
+  if (dualMic) names.insert(names.end(), {"Mic A Level", "Mic A Pan", "Mic B Level", "Mic B Pan", "Mic B Invert"});
   for (const auto& name : names)
   {
     double value = 0.0;
     pos = chunk.Get(&value, pos);
+    if (pos < 0) return -1;
     config[name] = value;
   }
   return pos;
-}
-
-// v0.7.17 uses the same chunk layout as v0.7.16. Disk presets may use
-// bundle:// asset references, which are resolved while applying the config.
-int _GetConfigFrom_0_7_17(const iplug::IByteChunk& chunk, int startPos, nlohmann::json& config)
-{
-  return _GetConfigFrom_0_7_16(chunk, startPos, config);
 }
 
 // v0.7.14
@@ -370,13 +379,10 @@ int NeuralAmpModeler::_UnserializeStateWithKnownVersion(const iplug::IByteChunk&
   _Version version(versionStr);
   // Act accordingly
   nlohmann::json config;
-  if (version >= _Version(0, 7, 17))
+  if (version >= _Version(0, 7, 16))
   {
-    pos = _GetConfigFrom_0_7_17(chunk, pos, config);
-  }
-  else if (version >= _Version(0, 7, 16))
-  {
-    pos = _GetConfigFrom_0_7_16(chunk, pos, config);
+    // 0.7.17 added portable path resolution. 0.7.18 added the second path and mix parameters.
+    pos = _ReadConfigWithFXSlots(chunk, pos, config, version >= _Version(0, 7, 18));
   }
   else if (version >= _Version(0, 7, 14))
   {
@@ -399,7 +405,10 @@ int NeuralAmpModeler::_UnserializeStateWithKnownVersion(const iplug::IByteChunk&
     // You shouldn't be here...
     assert(false);
   }
-  _UnserializeApplyConfig(config);
+  if (pos >= 0)
+    _UnserializeApplyConfig(config);
+  else
+    _RecordPresetLoadError("The preset state is incomplete.");
   return pos;
 }
 
@@ -407,6 +416,9 @@ int NeuralAmpModeler::_UnserializeStateWithUnknownVersion(const iplug::IByteChun
 {
   nlohmann::json config;
   int pos = _GetConfigFrom_Earlier(chunk, startPos, config);
-  _UnserializeApplyConfig(config);
+  if (pos >= 0)
+    _UnserializeApplyConfig(config);
+  else
+    _RecordPresetLoadError("The preset state is incomplete.");
   return pos;
 }

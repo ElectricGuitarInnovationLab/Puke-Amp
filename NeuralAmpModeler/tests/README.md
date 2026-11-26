@@ -41,7 +41,7 @@ Shared appearance and control smoke test (macOS/Windows):
   with each page open, then close/reopen the editor and move between Retina and
   standard displays. In other formats, verify the corner grip scales all pages
   proportionally within the same limits.
-- Open **Pedals**, **Settings**, and **Cabinet + mic...**, then close each page.
+- Open **Pedals**, **Settings**, and **Cabinet + mics...**, then close each page.
   Verify header buttons do not overlap page controls or intercept **Close**.
 - Check knob dragging, mouse wheel, double-click reset, and numeric value entry
   on the amplifier and pedal pages. Check Gate, EQ, cabinet, and pedal toggles
@@ -57,17 +57,21 @@ Shared appearance and control smoke test (macOS/Windows):
 
 Cabinet page smoke test (macOS/Windows):
 
-- Open **Cabinet + mic...** with no IR loaded; verify opening alone does not load
+- Open **Cabinet + mics...** with no IR loaded; verify opening alone does not load
   a sound. Check all five microphones and both offsets use the corresponding PNG.
 - Click and drag to 0, 1, 2, and 5 inches on both axes. Check exact readouts, capsule
   anchoring when changing angle, snapping between dots, and that only mouse release
   changes the sound. Try the two filename examples in `Models/CABINET_LIBRARY.md`.
 - Use arrow keys along each axis. Escape during dragging must cancel the change.
   Close/reopen and resize the editor; the art should retain its proportions.
-- Save/recall a preset and a DAW session, reopen the editor, and check all three
-  menus and distances. Recall a preset with no IR and confirm the previous IR is
+- Place both capsules on the same dot, select each row in turn, and move just its mic.
+  With the same WAV and both faders at unity and center, toggling B polarity should
+  cancel the output. Hard-pan A and B to check both output meters, then test mono.
+- Save/recall a preset and a DAW session, reopen the editor, and check both rows,
+  their placements, mix, and polarity. Recall a single-mic preset over the blend
+  and check that B switches off and both mixes return to unity and center. Recall a preset with no IR and confirm the previous IR is
   cleared from both sound and display. Clear then immediately choose another IR.
-- Load a custom WAV via the file icon and via **My IRs / import...**. Verify the
+- Load a custom WAV via the file icon and via **IR library / import...**. Verify the
   custom indication and that it does not claim a recorded microphone position.
 - Remove a selected WAV after opening the page, try loading it, and verify the
   prior sound/path/position survive the failure. Restore the WAV afterwards.

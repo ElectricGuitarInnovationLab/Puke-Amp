@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../AudioDSPTools/dsp/ImpulseResponse.h"
+#include "CabinetMixer.h"
 #include "../AudioDSPTools/dsp/NoiseGate.h"
 #include "../AudioDSPTools/dsp/dsp.h"
 #include "../AudioDSPTools/dsp/wav.h"
@@ -20,7 +20,7 @@
 
 
 const int kNumPresets = 1;
-// The plugin is mono inside
+// Amp and pedal processing is mono up to the cabinet mixer.
 constexpr size_t kNumChannelsInternal = 1;
 constexpr int kMaxFXSlots = 8;
 constexpr int kNumFXParamsPerSlot = 7;
@@ -36,11 +36,12 @@ enum EFXSlotParam
   kFXTrebleOffset
 };
 
-class NAMSender : public iplug::IPeakAvgSender<>
+template <int Channels>
+class NAMSender : public iplug::IPeakAvgSender<Channels>
 {
 public:
   NAMSender()
-  : iplug::IPeakAvgSender<>(-90.0, true, 5.0f, 1.0f, 300.0f, 500.0f)
+  : iplug::IPeakAvgSender<Channels>(-90.0, true, 5.0f, 1.0f, 300.0f, 500.0f)
   {
   }
 };
@@ -67,11 +68,12 @@ enum EParams
   // Append-only parameter bank: changing the existing indices breaks old sessions.
   kFXChainEnabled,
   kFXParamBase,
-  kNumParams = kFXParamBase + (kMaxFXSlots * kNumFXParamsPerSlot)
+  kMicALevel = kFXParamBase + (kMaxFXSlots * kNumFXParamsPerSlot),
+  kMicAPan, kMicBLevel, kMicBPan, kMicBInvert, kNumParams
 };
 
 static_assert(kFXParamBase == 14, "Existing plugin parameter indices must remain stable");
-static_assert(kNumParams == 70, "Update state migration when the parameter count changes");
+static_assert(kMicALevel == 70 && kNumParams == 75, "Update state migration when the parameter count changes");
 
 constexpr int FXParamIndex(const int slot, const EFXSlotParam offset)
 {
@@ -271,6 +273,8 @@ public:
   void ClearFXModel(int slot);
   void MoveFXModel(int from, int to);
   const WDL_String& GetFXModelPath(int slot) const;
+  nam_cabinet::Mixer::Result SelectCabinet(const nam_cabinet::Mixer::Changes& changes);
+  nam_cabinet::Mixer::Paths CabinetPaths() const { return mCabinet.GetPaths(); }
   void SetFXEditorSlot(int slot);
   bool SavePresetFile(const char* filePath, const char* bundledModelsRoot);
   bool LoadPresetFile(const char* filePath, const char* bundledModelsRoot);
@@ -306,11 +310,7 @@ private:
   // Returns an empty string on success, or an error message on failure.
   std::string _StageModel(const WDL_String& dspFile);
   std::string _StageFXModel(int slot, const WDL_String& dspFile);
-  // Loads an IR and stores it to mStagedIR.
-  // Return status code so that error messages can be relayed if
-  // it wasn't successful.
-  dsp::wav::LoadReturnCode _StageIR(const WDL_String& irPath);
-
+  void _RefreshCabinet();
   bool _HaveModel() const { return this->mModel != nullptr; };
   // Prepare the input & output buffers
   void _PrepareBuffers(const size_t numChannels, const size_t numFrames);
@@ -321,10 +321,8 @@ private:
   // :param nChansOut: Out to the internal of the DSP routine
   void _ProcessInput(iplug::sample** inputs, const size_t nFrames, const size_t nChansIn, const size_t nChansOut);
   // Copy the output to the output buffer, applying output level.
-  // :param nChansIn: In from internal
   // :param nChansOut: Out to external
-  void _ProcessOutput(iplug::sample** inputs, iplug::sample** outputs, const size_t nFrames, const size_t nChansIn,
-                      const size_t nChansOut);
+  void _ProcessOutput(iplug::sample** inputs, iplug::sample** outputs, const size_t nFrames, const size_t nChansOut);
   // Resetting for models and IRs, called by OnReset
   void _ResetModelAndIR(const double sampleRate, const int maxBlockSize);
 
@@ -379,15 +377,13 @@ private:
   dsp::noise_gate::Gain mNoiseGateGain;
   // The model actually being used:
   std::unique_ptr<ResamplingNAM> mModel;
-  // And the IR
-  std::unique_ptr<dsp::ImpulseResponse> mIR;
+  nam_cabinet::Mixer mCabinet;
+  std::atomic<bool> mCabinetChanged{false};
   // Manages switching what DSP is being used.
   std::unique_ptr<ResamplingNAM> mStagedModel;
-  std::unique_ptr<dsp::ImpulseResponse> mStagedIR;
   std::array<std::unique_ptr<FXModelSlot>, kMaxFXSlots> mFXSlots;
   // Flags to take away the modules at a safe time.
   std::atomic<bool> mShouldRemoveModel = false;
-  std::atomic<bool> mShouldRemoveIR = false;
 
   std::atomic<bool> mNewModelLoadedInDSP = false;
   std::atomic<bool> mModelCleared = false;
@@ -410,17 +406,18 @@ private:
   std::unique_ptr<dsp::tone_stack::AbstractToneStack> mToneStack;
 
   // Post-IR filters
-  recursive_linear_filter::HighPass mHighPass;
-  //  recursive_linear_filter::LowPass mLowPass;
+  struct OutputHighPass : recursive_linear_filter::HighPass
+  {
+    void Prepare(size_t channels, size_t frames) { _PrepareBuffers(channels, frames); }
+  } mHighPass;
 
   // Path to model's config.json or model.nam
   WDL_String mNAMPath;
-  // Path to IR (.wav file)
-  WDL_String mIRPath;
 
   WDL_String mHighLightColor{PluginColors::NAM_THEMECOLOR.ToColorCode()};
 
   std::unordered_map<std::string, double> mNAMParams = {{"Input", 0.0}, {"Output", 0.0}};
 
-  NAMSender mInputSender, mOutputSender;
+  NAMSender<1> mInputSender;
+  NAMSender<2> mOutputSender;
 };

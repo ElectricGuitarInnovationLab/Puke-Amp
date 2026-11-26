@@ -2,182 +2,229 @@
 
 #include "CabinetCatalog.h"
 
-// Included after NeuralAmpModelerControls.h. This page owns only editor state;
-// the selected WAV continues through the existing IR loader and preset format.
-class NAMCabinetPageControl : public IControl
+class NAMCabinetPageControl : public IContainerBase
 {
 public:
-  NAMCabinetPageControl(const IRECT& bounds, IFileDialogCompletionHandlerFunc load)
-  : IControl(bounds), mLoad(load) {}
+  explicit NAMCabinetPageControl(const IRECT& bounds)
+  : IContainerBase(bounds)
+  {
+  }
+
+  void OnAttached() override
+  {
+    const auto style = nam_ui::ControlStyle();
+    for (int i = 0; i < 2; ++i)
+    {
+      const float y = RowTop(i) + 30;
+      mLevel[i] =
+        AddChildControl(new NAMKnobControl(Box(314, y, 386, y + 70), i ? kMicBLevel : kMicALevel, "LEVEL", style));
+      mPan[i] = AddChildControl(new NAMKnobControl(Box(392, y, 464, y + 70), i ? kMicBPan : kMicAPan, "PAN", style));
+      auto selectRow = [this, i](IControl*) {
+        mActive = i;
+        SetDirty(false);
+      };
+      mLevel[i]->SetActionFunction(selectRow);
+      mPan[i]->SetActionFunction(selectRow);
+    }
+    mInvert = AddChildControl(
+      new NAMSwitchControl(Box(466, RowTop(1) + 41, 582, RowTop(1) + 69), kMicBInvert, "Invert polarity"));
+  }
 
   void Open()
   {
     EnsureCatalog();
-    auto* browser = Browser();
-    if (browser)
-      SyncFile(browser->CurrentFile());
     Hide(false);
-    LoadArtwork();
+    Sync(Plugin()->CabinetPaths(), true);
     GetUI()->SetAllControlsDirty();
   }
 
-  void OnMsgFromDelegate(int msgTag, int dataSize, const void* data) override
+  nam_cabinet::Mixer::Result LoadPrimaryFile(const std::string& path)
   {
-    if (msgTag == kMsgTagLoadedIR && data)
+    // The main window's file picker edits A. Resolve the cabinet of an existing
+    // second mic before changing A, even if this editor has never been opened.
+    const auto paths = Plugin()->CabinetPaths();
+    if (!paths[1].empty())
     {
-      mLoadFailed = false;
-      SyncFile(std::string(static_cast<const char*>(data), dataSize));
+      EnsureCatalog();
+      Sync(paths, true);
     }
-    else if (msgTag == kMsgTagClearIR)
+    return SelectFile(0, path);
+  }
+
+  void Sync(const nam_cabinet::Mixer::Paths& paths, bool force = false)
+  {
+    if (!force && paths == mPaths)
+      return;
+    mPaths = paths;
+    mDragging = false;
+    mStatus.clear();
+    if (mCatalogReady)
     {
-      mLoadFailed = false;
-      SyncFile("");
+      for (int i = 0; i < 2; ++i)
+        mPreview[i] = mLoaded[i] = mCatalog.Find(std::filesystem::u8path(paths[i]));
+      int fallback = mLoaded[0] >= 0 ? mLoaded[0] : mLoaded[1];
+      if (fallback < 0)
+        fallback = std::max(0, mCatalog.Nearest(0, 0, 0, 0.f, 0.f));
+      for (auto& index : mPreview)
+        if (index < 0)
+          index = fallback;
+      if (!IsHidden())
+        LoadArtwork();
     }
-    else if (msgTag == kMsgTagLoadFailed)
-    {
-      mLoadFailed = true;
-      SyncFile(mCurrentFile);
-    }
+    UpdateMixControls();
     SetDirty(false);
+  }
+
+  void UpdateMixControls()
+  {
+    if (!mInvert)
+      return;
+    const bool mono = Plugin()->NOutChansConnected() == 1;
+    for (int i = 0; i < 2; ++i)
+    {
+      mLevel[i]->SetMouseEventsWhenDisabled(false);
+      mPan[i]->SetMouseEventsWhenDisabled(false);
+      const bool off = mPaths[i].empty();
+      mLevel[i]->SetDisabled(off);
+      mPan[i]->SetDisabled(off || mono);
+      mPan[i]->SetTooltip(mono ? "Pan is available on stereo outputs" : "Microphone pan");
+    }
+    mInvert->SetMouseEventsWhenDisabled(false);
+    mInvert->SetDisabled(mPaths[1].empty());
   }
 
   void Draw(IGraphics& g) override
   {
-    const auto muted = PluginColors::MUTED;
     g.FillRect(PluginColors::BACKGROUND, mRECT);
-    Text(g, "CABINET & MICROPHONE", Box(24, 16, 500, 48), 20.f);
+    Text(g, "CABINET & MICROPHONES", Box(24, 12, 308, 50), 20.f);
     Button(g, CloseBounds(), "Close");
-    Button(g, LibraryBounds(), "My IRs / import...");
-    Button(g, ClearBounds(), "Clear IR");
-    if (!mError.empty())
+    Button(g, LibraryBounds(), mActive ? "Mic B IR library / import..." : "Mic A IR library / import...");
+    Button(g, ClearBounds(), mActive ? "Clear Mic B" : "Clear Mic A");
+    const bool catalog = mCatalogReady && mError.empty();
+    if (catalog)
     {
-      Text(g, "Cabinet library unavailable", Box(25, 135, 575, 165), 18.f);
-      Text(g, "Check Models/cabinet-library.json and its assets.", Box(25, 175, 575, 200), 14.f);
-      Text(g, "Custom IRs are still available below.", Box(25, 205, 575, 230), 14.f);
-      SetTooltip(mError.c_str());
-      return;
+      const auto& cab = mCatalog.cabinets[Recording(mActive).cabinet];
+      Text(g, "SPEAKER", Box(22, 55, 84, 82), 11.f, PluginColors::MUTED);
+      MenuButton(g, SpeakerBounds(), cab.name.c_str());
+      DrawStage(g);
     }
-    if (mPreview < 0)
-      return;
-    const auto& recording = mCatalog.recordings[mPreview];
-    const auto& cabinet = mCatalog.cabinets[recording.cabinet];
-    const auto& mic = mCatalog.microphones[recording.microphone];
-    const std::string labels[] = {cabinet.name, mic.name, std::to_string(recording.angle) + " degrees"};
-    const char* headings[] = {"SPEAKER", "MICROPHONE", "OFFSET"};
-    for (int i = 0; i < 3; ++i)
-    {
-      const auto bounds = MenuBounds(i);
-      Text(g, headings[i], bounds.GetTranslated(0, -18).GetFromTop(16), 10.f, muted);
-      Button(g, bounds, labels[i].c_str(), i == 0 ? 11.f : 12.f);
-      Text(g, "+", bounds.GetFromRight(16), 12.f, muted);
-    }
+    else
+      Text(g, "Cabinet library unavailable", StageBounds(), 15.f);
 
-    const auto stage = StageBounds();
-    g.FillRoundRect(PluginColors::PANEL, stage, 6.f);
-    g.PathClipRegion(stage);
-    DrawArtwork(g, mCabinetBitmap, cabinet.image, OriginX(), OriginY());
-    const auto color = PluginColors::NAM_THEMECOLOR;
-    const float step = Step();
-    // The front-view cabinet uses an explicit two-axis placement projection:
-    // right = distance from center; down = distance away from the grille.
-    g.DrawLine(color.WithOpacity(0.7f), OriginX(), OriginY(), OriginX() + MaxCenter() * step, OriginY());
-    g.DrawLine(color.WithOpacity(0.7f), OriginX(), OriginY(), OriginX(), OriginY() + MaxGrill() * step);
-    for (auto index : mCatalog.Positions(recording.cabinet, recording.microphone, recording.angle))
+    for (int i = 0; i < 2; ++i)
     {
-      const auto& position = mCatalog.recordings[index];
-      g.FillCircle(COLOR_BLACK.WithOpacity(0.65f), X(position), Y(position), 4.f);
-      g.DrawCircle(COLOR_WHITE.WithOpacity(0.8f), X(position), Y(position), 3.f);
+      const auto row = RowBounds(i);
+      g.FillRoundRect(PluginColors::PANEL, row, 5.f);
+      if (mActive == i)
+        g.DrawRoundRect(PluginColors::NAM_THEMECOLOR, row, 5.f);
+      Text(g, i ? "Mic B" : "Mic A", row.GetFromLeft(46).GetFromTop(30), 13.f);
+      std::string mic = mPaths[i].empty() ? "Off" : "Custom IR";
+      if (catalog && mLoaded[i] >= 0)
+        mic = mCatalog.microphones[Recording(i).microphone].name;
+      MenuButton(g, MicBounds(i), mic.c_str());
+      if (catalog && mLoaded[i] >= 0)
+      {
+        const auto angle = std::to_string(Recording(i).angle) + "°";
+        MenuButton(g, AngleBounds(i), angle.c_str());
+      }
     }
-    DrawArtwork(g, mMicBitmap, mic.images.at(recording.angle), X(recording), Y(recording));
-    g.FillCircle(COLOR_BLACK, X(recording), Y(recording), 5.f);
-    g.DrawCircle(color, X(recording), Y(recording), 6.f, nullptr, 2.f);
-    g.PathClipRegion();
-
-    Text(g, "MIC POSITION", Box(355, 128, 572, 150), 12.f, muted);
-    Text(g, (Inches(recording.center) + " from center").c_str(), Box(355, 156, 572, 182), 19.f);
-    Text(g, (Inches(recording.grill) + " from grille").c_str(), Box(355, 184, 572, 210), 19.f);
-    Text(g, "Right = from speaker center", Box(355, 223, 572, 242), 12.f, muted);
-    Text(g, "Down = away from grille", Box(355, 243, 572, 262), 12.f, muted);
-    Text(g, "Drag the mic or click a dot.", Box(355, 274, 572, 294), 12.f);
-    Text(g, "Release to load. Arrow keys also move.", Box(345, 295, 582, 314), 11.f, muted);
-    const char* status = mLoadFailed ? "IR failed to load; previous sound retained."
-      : mDragging ? "Release to load this recorded position"
-      : mLoaded == mPreview ? "Recorded position loaded"
-      : mCurrentFile.empty() ? "Select a position to load an IR"
-      : mLoaded < 0 ? "Custom IR loaded; select a position to replace it"
-      : "Select a position to load an IR";
-    Text(g, status, Box(24, 340, 576, 359), 12.f, muted);
+    if (catalog && (mLoaded[mActive] >= 0 || mDragging))
+    {
+      const auto& r = Recording(mActive);
+      const auto position = Inches(r.center) + " from center  /  " + Inches(r.grill) + " from grille";
+      Text(g, position.c_str(), Box(22, 310, 295, 333), 12.f);
+    }
+    const char* hint = !mStatus.empty() ? mStatus.c_str()
+                       : mDragging      ? "Release to load this position"
+                       : !catalog       ? "Use the IR library to select a custom recording."
+                                        : "Select a mic row to edit. Drag, click a dot, or use the arrow keys.";
+    Text(g, hint, Box(20, 334, 580, 359), 12.f, PluginColors::MUTED);
   }
 
   void OnMouseDown(float x, float y, const IMouseMod& mod) override
   {
     if (CloseBounds().Contains(x, y))
+    {
       Close();
-    else if (LibraryBounds().Contains(x, y))
-    {
-      if (auto* browser = Browser())
-        browser->OpenLibraryMenu(LibraryBounds());
+      return;
     }
-    else if (ClearBounds().Contains(x, y))
+    if (ClearBounds().Contains(x, y))
     {
-      GetDelegate()->SendArbitraryMsgFromUI(kMsgTagClearIR);
-      if (auto* browser = Browser())
-        browser->ClearDisplayedFile();
+      SelectFile(mActive, "");
+      return;
     }
-    else if (mError.empty() && mPreview >= 0)
+    if (LibraryBounds().Contains(x, y))
     {
-      for (int menu = 0; menu < 3; ++menu)
-        if (MenuBounds(menu).Contains(x, y))
-        {
-          ShowMenu(menu);
-          return;
-        }
-      if (StageBounds().Contains(x, y))
+      const int slot = mActive;
+      auto* browser = GetUI()->GetControlWithTag(kCtrlTagIRFileBrowser)->As<NAMFileBrowserControl>();
+      browser->OpenLibraryMenu(
+        LibraryBounds(), [this, slot](const WDL_String& file, const WDL_String&) { SelectFile(slot, file.Get()); },
+        &mPaths[slot]);
+      return;
+    }
+    const bool catalog = mCatalogReady && mError.empty();
+    for (int i = 0; i < 2; ++i)
+      if (RowBounds(i).Contains(x, y))
       {
-        mDragging = true;
-        const auto& r = mCatalog.recordings[mPreview];
-        // Grab the image without jumping its capsule to the mouse. A click on
-        // any recorded marker takes precedence over the image's hit rectangle.
-        bool onDot = false;
-        for (auto i : mCatalog.Positions(r.cabinet, r.microphone, r.angle))
-          onDot |= std::hypot(x - X(mCatalog.recordings[i]), y - Y(mCatalog.recordings[i])) < 6.f;
-        const auto micBounds = IRECT(X(r) - 15, Y(r) - 15, X(r) + (r.angle ? 85 : 15), Y(r) + 85);
-        mDragX = !onDot && micBounds.Contains(x, y) ? x - X(r) : 0.f;
-        mDragY = !onDot && micBounds.Contains(x, y) ? y - Y(r) : 0.f;
-        PreviewAt(x - mDragX, y - mDragY);
+        mActive = i;
+        SetDirty(false);
+        if (catalog && MicBounds(i).Contains(x, y))
+          ShowMenu(Menu::Mic);
+        else if (catalog && mLoaded[i] >= 0 && AngleBounds(i).Contains(x, y))
+          ShowMenu(Menu::Angle);
+        return;
       }
+    if (!catalog)
+      return;
+    if (SpeakerBounds().Contains(x, y))
+    {
+      ShowMenu(Menu::Speaker);
+      return;
     }
+    if (!StageBounds().Contains(x, y))
+      return;
+    if (!CanPlace())
+      return;
+    mDragging = true;
+    const auto& r = Recording(mActive);
+    bool onDot = false;
+    for (auto index : mCatalog.Positions(r.cabinet, r.microphone, r.angle))
+      onDot |= std::hypot(x - X(mCatalog.recordings[index]), y - Y(mCatalog.recordings[index])) < 6.f;
+    const auto micBounds = IRECT(X(r) - 15, Y(r) - 15, X(r) + (r.angle ? 85 : 15), Y(r) + 85);
+    mDragX = !onDot && micBounds.Contains(x, y) ? x - X(r) : 0.f;
+    mDragY = !onDot && micBounds.Contains(x, y) ? y - Y(r) : 0.f;
+    PreviewAt(x - mDragX, y - mDragY);
   }
 
-  void OnMouseDrag(float x, float y, float dX, float dY, const IMouseMod& mod) override
+  void OnMouseDrag(float x, float y, float, float, const IMouseMod&) override
   {
     if (mDragging)
       PreviewAt(x - mDragX, y - mDragY);
   }
 
-  void OnMouseUp(float x, float y, const IMouseMod& mod) override
+  void OnMouseUp(float, float, const IMouseMod&) override
   {
     if (mDragging)
     {
       mDragging = false;
-      Commit();
+      CommitPosition();
     }
   }
 
-  bool OnKeyDown(float x, float y, const IKeyPress& key) override
+  bool OnKeyDown(float, float, const IKeyPress& key) override
   {
     if (key.VK == kVK_ESCAPE)
     {
       Close();
       return true;
     }
-    if (mPreview < 0 || !mError.empty())
+    if (!mCatalogReady || !mError.empty() || !CanPlace())
       return false;
     const int dx = key.VK == kVK_RIGHT ? 1 : key.VK == kVK_LEFT ? -1 : 0;
     const int dy = key.VK == kVK_DOWN ? 1 : key.VK == kVK_UP ? -1 : 0;
     if (!dx && !dy)
       return false;
-    const auto current = mCatalog.recordings[mPreview];
+    const auto current = mCatalog.recordings[mPreview[mActive]];
     float best = std::numeric_limits<float>::max();
     for (auto index : mCatalog.Positions(current.cabinet, current.microphone, current.angle))
     {
@@ -189,51 +236,142 @@ public:
         if (distance < best)
         {
           best = distance;
-          mPreview = static_cast<int>(index);
+          mPreview[mActive] = static_cast<int>(index);
         }
       }
     }
     if (best < std::numeric_limits<float>::max())
-      Commit();
+      CommitPosition();
     return true;
   }
 
-  void OnPopupMenuSelection(IPopupMenu* menu, int valIdx) override
+  void OnPopupMenuSelection(IPopupMenu* menu, int) override
   {
-    if (!menu || menu->GetChosenItemIdx() < 0 || mPreview < 0)
+    if (!menu || menu->GetChosenItemIdx() < 0)
       return;
-    const auto choice = static_cast<size_t>(menu->GetChosenItemIdx());
-    if (choice >= mMenuValues.size())
+    const int choice = mValues.at(menu->GetChosenItemIdx());
+    if (mMenuKind == Menu::Mic && choice < 0)
+    {
+      SelectFile(mActive, "");
       return;
-    auto previous = mCatalog.recordings[mPreview];
-    auto cabinet = previous.cabinet, microphone = previous.microphone;
-    int angle = previous.angle;
-    if (mMenuKind == 0) cabinet = mMenuValues[choice];
-    if (mMenuKind == 1) microphone = mMenuValues[choice];
-    if (mMenuKind == 2) angle = mMenuValues[choice];
-    int nearest = mCatalog.Nearest(cabinet, microphone, angle, previous.center, previous.grill);
-    if (nearest < 0)
-    {
-      // A newly chosen cabinet/mic may not offer the previous angle or mic.
-      for (const auto& candidate : mCatalog.recordings)
-        if (candidate.cabinet == cabinet && (mMenuKind == 0 || candidate.microphone == microphone))
-        {
-          nearest = mCatalog.Nearest(cabinet, candidate.microphone, candidate.angle, previous.center, previous.grill);
-          break;
-        }
     }
-    if (nearest >= 0)
+    const auto& r = Recording(mActive);
+    if (mMenuKind == Menu::Speaker)
     {
-      mPreview = nearest;
-      LoadArtwork();
-      Commit();
+      nam_cabinet::Mixer::Changes edits;
+      for (int i = 0; i < 2; ++i)
+        if (mLoaded[i] >= 0 || (mLoaded[1 - i] < 0 && i == mActive))
+          edits[i] = Path(Nearest(Recording(i), choice, Recording(i).microphone, Recording(i).angle));
+      Apply(edits);
+      return;
     }
+    const int index = Nearest(
+      r, r.cabinet, mMenuKind == Menu::Mic ? choice : r.microphone, mMenuKind == Menu::Angle ? choice : r.angle);
+    SelectFile(mActive, Path(index));
   }
 
 private:
-  NAMFileBrowserControl* Browser() const
+  enum class Menu
   {
-    return GetUI()->GetControlWithTag(kCtrlTagIRFileBrowser)->As<NAMFileBrowserControl>();
+    Speaker,
+    Mic,
+    Angle
+  };
+  NeuralAmpModeler* Plugin() { return static_cast<NeuralAmpModeler*>(GetDelegate()); }
+  const nam_cabinet::Recording& Recording(int i) const { return mCatalog.recordings[mPreview[i]]; }
+  std::string Path(int index) const { return nam_cabinet::PathString(mCatalog.recordings[index].path); }
+  bool CanPlace() const { return mLoaded[mActive] >= 0 || (!mActive && mPaths[0].empty()); }
+
+  int Nearest(const nam_cabinet::Recording& r, size_t cab, size_t mic, int angle) const
+  {
+    int index = mCatalog.Nearest(cab, mic, angle, r.center, r.grill);
+    if (index >= 0)
+      return index;
+    for (const auto& item : mCatalog.recordings)
+      if (item.cabinet == cab && item.microphone == mic)
+        return mCatalog.Nearest(cab, mic, item.angle, r.center, r.grill);
+    for (const auto& item : mCatalog.recordings)
+      if (item.cabinet == cab)
+        return mCatalog.Nearest(cab, item.microphone, item.angle, r.center, r.grill);
+    throw std::logic_error("Selected cabinet has no recordings");
+  }
+
+  nam_cabinet::Mixer::Result SelectFile(int slot, const std::string& file)
+  {
+    nam_cabinet::Mixer::Changes edits;
+    edits[slot] = file;
+    const int index = mCatalogReady ? mCatalog.Find(std::filesystem::u8path(file)) : -1;
+    const int other = 1 - slot;
+    if (index >= 0 && mLoaded[other] >= 0)
+    {
+      const auto& r = Recording(other);
+      const auto cab = mCatalog.recordings[index].cabinet;
+      if (r.cabinet != cab)
+        edits[other] = Path(Nearest(r, cab, r.microphone, r.angle));
+    }
+    return Apply(edits);
+  }
+
+  nam_cabinet::Mixer::Result Apply(const nam_cabinet::Mixer::Changes& edits)
+  {
+    const auto result = Plugin()->SelectCabinet(edits);
+    Sync(Plugin()->CabinetPaths(), true);
+    if (result.status != nam_cabinet::Mixer::Status::SUCCESS)
+      mStatus = std::string(result.slot ? "Mic B" : "Mic A") + " failed to load. Previous sound retained.";
+    return result;
+  }
+
+  void CommitPosition() { SelectFile(mActive, Path(mPreview[mActive])); }
+  void Close()
+  {
+    mDragging = false;
+    Hide(true);
+    GetUI()->SetAllControlsDirty();
+  }
+
+  void PreviewAt(float x, float y)
+  {
+    const auto& r = Recording(mActive);
+    mPreview[mActive] =
+      mCatalog.Nearest(r.cabinet, r.microphone, r.angle, (x - OriginX()) / mStep, (y - OriginY()) / mStep);
+    SetDirty(false);
+  }
+
+  void ShowMenu(Menu kind)
+  {
+    mMenuKind = kind;
+    const auto& r = Recording(mActive);
+    std::set<int> values;
+    if (kind == Menu::Mic)
+      values.insert(-1);
+    for (const auto& item : mCatalog.recordings)
+    {
+      if (kind == Menu::Speaker)
+        values.insert(static_cast<int>(item.cabinet));
+      if (kind == Menu::Mic && item.cabinet == r.cabinet)
+        values.insert(static_cast<int>(item.microphone));
+      if (kind == Menu::Angle && item.cabinet == r.cabinet && item.microphone == r.microphone)
+        values.insert(item.angle);
+    }
+    mValues.assign(values.begin(), values.end());
+    mMenu.Clear();
+    for (int v : mValues)
+    {
+      const auto label = v < 0                   ? std::string("Off")
+                         : kind == Menu::Mic     ? mCatalog.microphones[v].name
+                         : kind == Menu::Speaker ? mCatalog.cabinets[v].name
+                                                 : std::to_string(v) + "°";
+      const int current = kind == Menu::Speaker     ? static_cast<int>(r.cabinet)
+                          : kind == Menu::Angle     ? r.angle
+                          : mLoaded[mActive] >= 0   ? static_cast<int>(r.microphone)
+                          : mPaths[mActive].empty() ? -1
+                                                    : -2;
+      mMenu.AddItem(label.c_str())->SetChecked(v == current);
+    }
+    GetUI()->CreatePopupMenu(*this, mMenu,
+                             kind == Menu::Speaker ? SpeakerBounds()
+                             : kind == Menu::Mic   ? MicBounds(mActive)
+                                                   : AngleBounds(mActive));
   }
 
   void EnsureCatalog()
@@ -257,142 +395,104 @@ private:
         PluginPath(root, static_cast<PluginIDType>(GetUI()->GetWinModuleHandle()));
 #endif
       mCatalog = nam_cabinet::Catalog::Load(std::filesystem::u8path(root.Get()) / "Models");
-      mPreview = mCatalog.Nearest(0, 0, 0, 0.f, 0.f);
-      if (mPreview < 0)
-        mPreview = 0;
+
       mError.clear();
       mCatalogReady = true;
     }
     catch (const std::exception& error)
     {
       mError = error.what();
+      SetTooltip(mError.c_str());
     }
-  }
-
-  void SyncFile(const std::string& file)
-  {
-    mCurrentFile = file;
-    SetTooltip(file.empty() ? "Choose a recorded microphone position" : file.c_str());
-    if (!mCatalogReady)
-      return;
-    mLoaded = mCatalog.Find(std::filesystem::u8path(file));
-    if (mLoaded >= 0)
-      mPreview = mLoaded;
-    if (!IsHidden())
-      LoadArtwork();
-    SetDirty(false);
-  }
-
-  void Close()
-  {
-    mDragging = false;
-    Hide(true);
-    GetUI()->SetAllControlsDirty();
-  }
-
-  void Commit()
-  {
-    if (mPreview < 0)
-      return;
-    const auto path = nam_cabinet::PathString(mCatalog.recordings[mPreview].path);
-    // Loading is deliberately deferred until release, outside the audio thread.
-    // OnMsgFromDelegate confirms the new path or rolls the preview back on error.
-    if (path != mCurrentFile || mLoadFailed)
-      mLoad(WDL_String(path.c_str()), WDL_String());
-    SetDirty(false);
-  }
-
-  void PreviewAt(float x, float y)
-  {
-    const auto& r = mCatalog.recordings[mPreview];
-    const int nearest = mCatalog.Nearest(r.cabinet, r.microphone, r.angle,
-                                        (x - OriginX()) / Step(), (y - OriginY()) / Step());
-    if (nearest >= 0)
-      mPreview = nearest;
-    SetDirty(false);
-  }
-
-  void ShowMenu(int kind)
-  {
-    const auto& selected = mCatalog.recordings[mPreview];
-    std::set<int> values;
-    for (const auto& r : mCatalog.recordings)
-    {
-      if (kind == 0) values.insert(static_cast<int>(r.cabinet));
-      if (kind == 1 && r.cabinet == selected.cabinet) values.insert(static_cast<int>(r.microphone));
-      if (kind == 2 && r.cabinet == selected.cabinet && r.microphone == selected.microphone) values.insert(r.angle);
-    }
-    mMenuKind = kind;
-    mMenuValues.assign(values.begin(), values.end());
-    mMenu.Clear();
-    for (int value : mMenuValues)
-    {
-      const auto label = kind == 0 ? mCatalog.cabinets[value].name
-        : kind == 1 ? mCatalog.microphones[value].name : std::to_string(value) + " degrees";
-      auto* item = mMenu.AddItem(label.c_str());
-      item->SetChecked(value == (kind == 0 ? static_cast<int>(selected.cabinet)
-                                : kind == 1 ? static_cast<int>(selected.microphone) : selected.angle));
-    }
-    GetUI()->CreatePopupMenu(*this, mMenu, MenuBounds(kind));
   }
 
   void LoadArtwork()
   {
-    if (mPreview < 0 || !mError.empty())
-      return;
-    const auto& r = mCatalog.recordings[mPreview];
-    auto load = [this](const nam_cabinet::Artwork& artwork) {
-      const auto path = nam_cabinet::PathString(artwork.path);
-      std::error_code error;
-      if (!std::filesystem::is_regular_file(artwork.path, error))
-      {
-        mError = "Cabinet artwork is missing: " + path;
-        return IBitmap();
-      }
-      // Explicit source scale avoids creating huge Retina copies of source art.
-      const auto bitmap = GetUI()->LoadBitmap(path.c_str(), 1, false, 1);
+    const auto cab = Recording(mActive).cabinet;
+    float extent = 5.f;
+    for (const auto& r : mCatalog.recordings)
+      if (r.cabinet == cab)
+        extent = std::max({extent, r.center, r.grill});
+    mStep = 60.f / extent;
+    auto load = [this](const nam_cabinet::Artwork& art) {
+      const auto path = nam_cabinet::PathString(art.path);
+      auto bitmap = GetUI()->LoadBitmap(path.c_str(), 1, false, 1);
       if (!bitmap.IsValid() || bitmap.W() <= 0 || bitmap.H() <= 0)
-        mError = "Cabinet artwork could not be decoded: " + path;
+      {
+        mError = "Cabinet artwork could not be loaded: " + path;
+        SetTooltip(mError.c_str());
+      }
       return bitmap;
     };
-    mCabinetBitmap = load(mCatalog.cabinets[r.cabinet].image);
-    mMicBitmap = load(mCatalog.microphones[r.microphone].images.at(r.angle));
+    mCabBitmap = load(mCatalog.cabinets[cab].image);
+    for (int i = 0; i < 2; ++i)
+    {
+      const auto& r = Recording(i);
+      mMicBitmap[i] = load(mCatalog.microphones[r.microphone].images.at(r.angle));
+    }
   }
 
-  void DrawArtwork(IGraphics& g, const IBitmap& bitmap, const nam_cabinet::Artwork& art, float x, float y)
+  void DrawStage(IGraphics& g)
   {
-    if (!bitmap.IsValid())
-      return;
-    const auto& cabinet = mCatalog.cabinets[mCatalog.recordings[mPreview].cabinet];
-    const float scale = Step() / cabinet.pixelsPerInch * art.scale;
-    const float left = x - art.anchorX * scale, top = y - art.anchorY * scale;
-    g.DrawFittedBitmap(bitmap, IRECT(left, top, left + bitmap.W() * scale, top + bitmap.H() * scale));
+    const auto stage = StageBounds();
+    const auto& selected = Recording(mActive);
+    const auto& cab = mCatalog.cabinets[selected.cabinet];
+    auto artwork = [&](const IBitmap& bitmap, const nam_cabinet::Artwork& art, float x, float y) {
+      if (!bitmap.IsValid())
+        return;
+      const float scale = mStep / cab.pixelsPerInch * art.scale;
+      const float left = x - art.anchorX * scale, top = y - art.anchorY * scale;
+      g.DrawFittedBitmap(bitmap, IRECT(left, top, left + bitmap.W() * scale, top + bitmap.H() * scale));
+    };
+    g.FillRoundRect(PluginColors::PANEL, stage, 6.f);
+    g.PathClipRegion(stage);
+    artwork(mCabBitmap, cab.image, OriginX(), OriginY());
+    g.DrawLine(PluginColors::MUTED, OriginX(), OriginY(), OriginX() + 60, OriginY());
+    g.DrawLine(PluginColors::MUTED, OriginX(), OriginY(), OriginX(), OriginY() + 60);
+    if (CanPlace())
+      for (auto index : mCatalog.Positions(selected.cabinet, selected.microphone, selected.angle))
+      {
+        const auto& r = mCatalog.recordings[index];
+        g.FillCircle(COLOR_BLACK, X(r), Y(r), 3.f);
+        g.DrawCircle(COLOR_WHITE, X(r), Y(r), 3.f);
+      }
+    const int order[] = {1 - mActive, mActive};
+    for (int i : order)
+    {
+      if (mLoaded[i] < 0 && !(mDragging && i == mActive))
+        continue;
+      const auto& r = Recording(i);
+      artwork(mMicBitmap[i], mCatalog.microphones[r.microphone].images.at(r.angle), X(r), Y(r));
+    }
+    for (int i : order)
+    {
+      if (mLoaded[i] < 0 && !(mDragging && i == mActive))
+        continue;
+      const auto& r = Recording(i);
+      g.DrawCircle(i == mActive ? PluginColors::NAM_THEMECOLOR : COLOR_WHITE, X(r), Y(r), 6.f, nullptr, 2.f);
+      const float x = X(r) + (i ? 10.f : -18.f);
+      const IRECT badge(x - 7, Y(r) - 17, x + 7, Y(r) - 3);
+      g.FillRoundRect(COLOR_BLACK, badge, 3);
+      Text(g, i ? "B" : "A", badge, 11.f);
+    }
+    g.PathClipRegion();
   }
 
-  IRECT Box(float l, float t, float r, float b) const { return IRECT(mRECT.L + l, mRECT.T + t, mRECT.L + r, mRECT.T + b); }
-  IRECT MenuBounds(int menu) const
-  {
-    return menu == 0 ? Box(24, 77, 290, 108) : menu == 1 ? Box(298, 77, 480, 108) : Box(488, 77, 576, 108);
-  }
-  IRECT StageBounds() const { return Box(24, 116, 335, 333); }
+  IRECT Box(float l, float t, float r, float b) const
+  { return IRECT(mRECT.L + l, mRECT.T + t, mRECT.L + r, mRECT.T + b); }
+  float RowTop(int i) const { return 92.f + 116.f * i; }
+  IRECT RowBounds(int i) const { return Box(302, RowTop(i) - 2, 580, RowTop(i) + 107); }
+  IRECT MicBounds(int i) const { return Box(348, RowTop(i) + 3, 512, RowTop(i) + 29); }
+  IRECT AngleBounds(int i) const { return Box(516, RowTop(i) + 3, 575, RowTop(i) + 29); }
+  IRECT SpeakerBounds() const { return Box(86, 55, 378, 82); }
+  IRECT StageBounds() const { return Box(22, 91, 294, 309); }
   IRECT CloseBounds() const { return Box(510, 20, 576, 46); }
-  IRECT LibraryBounds() const { return Box(24, 365, 182, 390); }
-  IRECT ClearBounds() const { return Box(490, 365, 576, 390); }
-  float OriginX() const { return mRECT.L + 170.f; }
-  float OriginY() const { return mRECT.T + 190.f; }
-  float MaxCenter() const { return Extent(true); }
-  float MaxGrill() const { return Extent(false); }
-  float Extent(bool center) const
-  {
-    float value = 5.f;
-    const auto& selected = mCatalog.recordings[mPreview];
-    for (auto i : mCatalog.Positions(selected.cabinet, selected.microphone, selected.angle))
-      value = std::max(value, center ? mCatalog.recordings[i].center : mCatalog.recordings[i].grill);
-    return value;
-  }
-  float Step() const { return 60.f / std::max(MaxCenter(), MaxGrill()); }
-  float X(const nam_cabinet::Recording& r) const { return OriginX() + r.center * Step(); }
-  float Y(const nam_cabinet::Recording& r) const { return OriginY() + r.grill * Step(); }
+  IRECT LibraryBounds() const { return Box(24, 365, 212, 390); }
+  IRECT ClearBounds() const { return Box(466, 365, 576, 390); }
+  float OriginX() const { return mRECT.L + 150.f; }
+  float OriginY() const { return mRECT.T + 165.f; }
+  float X(const nam_cabinet::Recording& r) const { return OriginX() + r.center * mStep; }
+  float Y(const nam_cabinet::Recording& r) const { return OriginY() + r.grill * mStep; }
   static std::string Inches(float value)
   {
     std::ostringstream text;
@@ -400,21 +500,31 @@ private:
     return text.str();
   }
   static void Text(IGraphics& g, const char* text, const IRECT& bounds, float size, const IColor& color = COLOR_WHITE)
-  {
-    g.DrawText(nam_ui::Text(size, color), text, bounds);
-  }
+  { g.DrawText(nam_ui::Text(size, color), text, bounds); }
   static void Button(IGraphics& g, const IRECT& bounds, const char* label, float size = 12.f)
+  { nam_ui::DrawButton(g, bounds, label, false, size); }
+
+  static void MenuButton(IGraphics& g, const IRECT& bounds, const char* label)
   {
-    nam_ui::DrawButton(g, bounds, label, false, size);
+    g.FillRoundRect(PluginColors::SURFACE, bounds, 4.f);
+    Text(g, label, bounds.GetReducedFromRight(14.f), 12.f);
+    const float x = bounds.R - 11.f, y = bounds.MH();
+    g.DrawLine(PluginColors::MUTED, x - 3.f, y - 1.5f, x, y + 1.5f);
+    g.DrawLine(PluginColors::MUTED, x, y + 1.5f, x + 3.f, y - 1.5f);
   }
 
   nam_cabinet::Catalog mCatalog;
-  bool mCatalogReady = false, mDragging = false, mLoadFailed = false;
-  int mPreview = -1, mLoaded = -1, mMenuKind = 0;
-  float mDragX = 0.f, mDragY = 0.f;
-  std::string mError, mCurrentFile;
-  IBitmap mCabinetBitmap, mMicBitmap;
+  nam_cabinet::Mixer::Paths mPaths;
+  std::array<int, 2> mPreview{-1, -1}, mLoaded{-1, -1};
+  int mActive = 0;
+  bool mCatalogReady = false, mDragging = false;
+  float mStep = 12.f, mDragX = 0.f, mDragY = 0.f;
+  std::string mError, mStatus;
+  IBitmap mCabBitmap, mMicBitmap[2];
+  IControl* mLevel[2]{};
+  IControl* mPan[2]{};
+  IControl* mInvert = nullptr;
   IPopupMenu mMenu;
-  std::vector<int> mMenuValues;
-  IFileDialogCompletionHandlerFunc mLoad;
+  Menu mMenuKind = Menu::Mic;
+  std::vector<int> mValues;
 };

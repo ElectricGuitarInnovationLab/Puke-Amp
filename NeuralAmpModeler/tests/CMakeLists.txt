@@ -38,8 +38,17 @@ list(GET IR_FIXTURES 0 IR_FIXTURE)
 add_test(NAME asset_validation COMMAND asset_validation_test
          "${AMP_FIXTURE}" "${PEDAL_FIXTURE}" "${IR_FIXTURE}")
 
+add_executable(cabinet_mixer_test cabinet_mixer_test.cpp
+               "${REPOSITORY_ROOT}/AudioDSPTools/dsp/dsp.cpp"
+               "${REPOSITORY_ROOT}/AudioDSPTools/dsp/ImpulseResponse.cpp"
+               "${REPOSITORY_ROOT}/AudioDSPTools/dsp/wav.cpp")
+target_include_directories(cabinet_mixer_test SYSTEM PRIVATE "${REPOSITORY_ROOT}/eigen")
+target_link_libraries(cabinet_mixer_test PRIVATE Threads::Threads)
+list(GET IR_FIXTURES 1 SECOND_IR_FIXTURE)
+add_test(NAME cabinet_mixer COMMAND cabinet_mixer_test "${IR_FIXTURE}" "${SECOND_IR_FIXTURE}")
+
 # Assertions are the test oracle, including in release builds.
-foreach(target asset_library_test asset_validation_test cabinet_catalog_test editor_size_test)
+foreach(target asset_library_test asset_validation_test cabinet_catalog_test cabinet_mixer_test editor_size_test)
   if(MSVC)
     target_compile_options(${target} PRIVATE /UNDEBUG)
     target_compile_definitions(${target} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)

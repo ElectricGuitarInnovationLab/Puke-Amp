@@ -8,32 +8,41 @@ changing an installed catalog.
 
 ## Using the selector
 
-Click **Cabinet + mic...** in the main window. Choose a **Speaker**, **Microphone**,
-and **Offset**, then drag the microphone or click a recorded-position dot. The
-highlighted ring marks the microphone's capture point. Horizontal movement selects
-distance from the speaker center; downward movement selects distance away from the
-grille. These are a labeled two-axis projection, not a perspective measurement.
-The readouts give the exact recorded distances in inches.
+Click **Cabinet + mics...** in the main window. The speaker selector above the grid
+sets the cabinet for both recorded microphones. Choose a microphone in the **Mic A**
+or **Mic B** row, then choose its angle. Both microphones receive the same amp output.
+Mic B starts **Off**. When adding a second mic, its placement starts at the nearest
+available capture to the first mic.
 
-The display snaps to available recordings. Releasing the mouse loads that WAV;
-dragging alone does not repeatedly rebuild the convolution engine. Arrow keys move
-to the next recorded distance on the same row or column and load immediately.
-Changing a menu loads the nearest available position to the previous selection.
-Opening the page does not change the sound. **Close** or Escape returns to the amp.
+Click a row to edit that microphone, including when the capsules overlap. The A/B badges
+identify each capsule. Drag the selected microphone or click a recorded dot and release
+to load that WAV. Arrow keys move to the next recorded distance on the same row or
+column and load immediately. Right moves away from the center, and down moves away
+from the grille. Opening the page or dragging a preview leaves playback alone until
+a selection is committed. **Close** or Escape returns to the amp.
 
-The current library has positions at **0, 1, 2, and 5 inches** on each axis, for
-each of five microphone types at **0 or 45 degrees**. Royer front and back are
-separate choices sharing the supplied Royer artwork. No interpolation or synthetic
-IRs are used. The capsule, cabinet, and mic art use a common display scale; the
-supplied catalog maps one inch to 260 source pixels (12 logical UI pixels at the
-current five-inch range). Editor resizing scales the entire page together.
+Each row has a level control (−60 to +12 dB) and pan. Both default to **0 dB, center**.
+Center sends full level to each stereo channel. Panning attenuates the opposite channel.
+On a mono output both mic levels contribute and the saved pan settings take effect again
+when using stereo. **Invert polarity** reverses Mic B. Two identical recordings at
+unity and center add about 6 dB, or cancel when B is inverted. Use the stereo output
+meter to check peaks while blending.
 
-**My IRs / import...** opens the existing user-library menu, including file/folder
-import, refresh, and reveal. The main window's file icon still loads external WAVs.
-Custom IRs remain usable even if they have no placement metadata; the page labels
-them as custom rather than claiming a cabinet position. **Clear IR** removes the
-current IR. The **Enabled** toggle beside **CABINET** in the main window controls cabinet bypass.
-Presets and DAW sessions continue saving the WAV path in the existing format.
+The current library has positions at **0, 1, 2, and 5 inches** on each axis for five
+microphone choices at **0 or 45 degrees**. Royer front and back share the supplied
+Royer artwork. Both mics snap to actual recordings on one physical scale.
+
+The page's **IR library / import...** button targets the selected row. Imported
+recordings without placement metadata appear as **Custom IR** and have level, pan,
+and (for B) polarity controls. **Clear Mic A/B** or **Off** removes just that slot.
+On the main window, opening a WAV directly selects it for Mic A. Choosing a different
+recorded cabinet moves the other recorded mic to its nearest available position. The
+main clear button clears both slots. **Enabled** bypasses the whole cabinet while
+retaining both selections. After a short fade, bypass skips convolution. Selecting
+the same WAV twice shares a single convolution result.
+
+Presets and DAW sessions save both WAV references, levels, pans, and B polarity.
+Earlier presets open with their original WAV in Mic A and Mic B off.
 
 ## Adding a cabinet or microphone
 

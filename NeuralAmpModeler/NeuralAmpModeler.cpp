@@ -88,6 +88,12 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     GetParam(FXParamIndex(slot, kFXTrebleOffset))->InitDouble((prefix + "Treble").c_str(), 5.0, 0.0, 10.0, 0.1);
   }
 
+  GetParam(kMicALevel)->InitGain("Mic A Level", 0., -60., 12., 0.1);
+  GetParam(kMicAPan)->InitDouble("Mic A Pan", 0., -100., 100., 1., "%");
+  GetParam(kMicBLevel)->InitGain("Mic B Level", 0., -60., 12., 0.1);
+  GetParam(kMicBPan)->InitDouble("Mic B Pan", 0., -100., 100., 1., "%");
+  GetParam(kMicBInvert)->InitBool("Mic B Invert", false);
+
   mNoiseGateTrigger.AddListener(&mNoiseGateGain);
 
   mMakeGraphicsFunc = [&]() {
@@ -185,7 +191,8 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     auto loadIRCompletionHandler = [&](const WDL_String& fileName, const WDL_String& path) {
       if (fileName.GetLength())
       {
-        const dsp::wav::LoadReturnCode retCode = _StageIR(fileName);
+        auto* page = GetUI()->GetControlWithTag(kCtrlTagCabinetPage)->As<NAMCabinetPageControl>();
+        const auto retCode = page->LoadPrimaryFile(fileName.Get()).status;
         if (retCode != dsp::wav::LoadReturnCode::SUCCESS)
         {
           std::stringstream message;
@@ -263,7 +270,7 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     pGraphics->AttachControl(new NAMSwitchControl(irToggleArea, kIRToggle, "Enabled"))
       ->SetTooltip("Cabinet IR on/off");
     pGraphics->AttachControl(
-      new NAMFileBrowserControl(irArea, kMsgTagClearIR, "Cabinet + mic...", "wav", loadIRCompletionHandler, style,
+      new NAMFileBrowserControl(irArea, kMsgTagClearIR, "Cabinet + mics...", "wav", loadIRCompletionHandler, style,
                                 fileSVG, crossSVG, leftArrowSVG, rightArrowSVG, globeSVG,
                                 "Get IRs", getUrl, "IR", true, [pGraphics](IControl*) {
                                   pGraphics->GetControlWithTag(kCtrlTagCabinetPage)->As<NAMCabinetPageControl>()->Open();
@@ -285,8 +292,8 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     pGraphics->AttachControl(new NAMKnobControl(outputKnobArea, kOutputLevel, "OUTPUT", style));
 
     // The meters
-    pGraphics->AttachControl(new NAMMeterControl(inputMeterArea, style), kCtrlTagInputMeter);
-    pGraphics->AttachControl(new NAMMeterControl(outputMeterArea, style), kCtrlTagOutputMeter);
+    pGraphics->AttachControl(new NAMMeterControl<1>(inputMeterArea, style), kCtrlTagInputMeter);
+    pGraphics->AttachControl(new NAMMeterControl<2>(outputMeterArea, style), kCtrlTagOutputMeter);
 
     pGraphics->AttachControl(new NAMTextButtonControl(
       settingsButtonArea, "Settings",
@@ -306,7 +313,7 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
                       kCtrlTagSettingsBox)
       ->Hide(true);
 
-    pGraphics->AttachControl(new NAMCabinetPageControl(b, loadIRCompletionHandler), kCtrlTagCabinetPage)->Hide(true);
+    pGraphics->AttachControl(new NAMCabinetPageControl(b), kCtrlTagCabinetPage)->Hide(true);
 
     const auto slimKnobArea = b.GetCentredInside(120.f, 120.f);
     pGraphics->AttachControl(new NAMSlimOverlayBackdropControl(b, hideSlimOverlay), kCtrlTagSlimOverlayBackdrop)
@@ -429,30 +436,20 @@ void NeuralAmpModeler::ProcessBlock(iplug::sample** inputs, iplug::sample** outp
                                     ? mToneStack->Process(gateGainOutput, numChannelsInternal, nFrames)
                                     : gateGainOutput;
 
-  sample** irPointers = toneStackOutPointers;
-  if (mIR != nullptr && GetParam(kIRToggle)->Value())
-    irPointers = mIR->Process(toneStackOutPointers, numChannelsInternal, numFrames);
-
-  // And the HPF for DC offset (Issue 271)
-  const double highPassCutoffFreq = kDCBlockerFrequency;
-  // const double lowPassCutoffFreq = 20000.0;
-  const recursive_linear_filter::HighPassParams highPassParams(sampleRate, highPassCutoffFreq);
-  // const recursive_linear_filter::LowPassParams lowPassParams(sampleRate, lowPassCutoffFreq);
-  mHighPass.SetParams(highPassParams);
-  // mLowPass.SetParams(lowPassParams);
-  sample** hpfPointers = mHighPass.Process(irPointers, numChannelsInternal, numFrames);
-  // sample** lpfPointers = mLowPass.Process(hpfPointers, numChannelsInternal, numFrames);
-
-  // restore previous floating point state
+  if (numChannelsExternalOut > 0 && nFrames > 0)
+  {
+    const std::array<nam_cabinet::Mixer::Mix, 2> mix{{
+      {DBToAmp(GetParam(kMicALevel)->Value()), GetParam(kMicAPan)->Value() / 100.},
+      {DBToAmp(GetParam(kMicBLevel)->Value()) * (GetParam(kMicBInvert)->Bool() ? -1. : 1.),
+       GetParam(kMicBPan)->Value() / 100.}
+    }};
+    mCabinet.Process(toneStackOutPointers[0], outputs, static_cast<int>(numChannelsExternalOut), nFrames,
+                     mix, GetParam(kIRToggle)->Bool());
+    auto** filtered = mHighPass.Process(outputs, numChannelsExternalOut, numFrames);
+    _ProcessOutput(filtered, outputs, numFrames, numChannelsExternalOut);
+    _UpdateMeters(mInputPointers, outputs, numFrames, numChannelsInternal, numChannelsExternalOut);
+  }
   std::feupdateenv(&fe_state);
-
-  // Let's get outta here
-  // This is where we exit mono for whatever the output requires.
-  _ProcessOutput(hpfPointers, outputs, numFrames, numChannelsInternal, numChannelsExternalOut);
-  // _ProcessOutput(lpfPointers, outputs, numFrames, numChannelsInternal, numChannelsExternalOut);
-  // * Output of input leveling (inputs -> mInputPointers),
-  // * Output of output leveling (mOutputPointers -> outputs)
-  _UpdateMeters(mInputPointers, outputs, numFrames, numChannelsInternal, numChannelsExternalOut);
 }
 
 void NeuralAmpModeler::OnReset()
@@ -465,6 +462,8 @@ void NeuralAmpModeler::OnReset()
   // I'm ignoring the model & IR, but it's not the end of the world.
   const int tailCycles = 10;
   SetTailSize(tailCycles * (int)(sampleRate / kDCBlockerFrequency));
+  mHighPass.SetParams(recursive_linear_filter::HighPassParams(sampleRate, kDCBlockerFrequency));
+  mHighPass.Prepare(std::clamp(NOutChansConnected(), 1, 2), std::max(1, maxBlockSize));
   mInputSender.Reset(sampleRate);
   mOutputSender.Reset(sampleRate);
   // If there is a model or IR loaded, they need to be checked for resampling.
@@ -481,6 +480,8 @@ void NeuralAmpModeler::OnIdle()
       if (auto* browser = dynamic_cast<NAMFileBrowserControl*>(graphics->GetControlWithTag(tag)))
         browser->PollImport();
   }
+  mCabinet.Collect();
+  if (GetUI() && mCabinetChanged.exchange(false)) _RefreshCabinet();
   mInputSender.TransmitData(*this);
   mOutputSender.TransmitData(*this);
 
@@ -531,9 +532,10 @@ bool NeuralAmpModeler::SerializeState(IByteChunk& chunk) const
   // Model directory (don't serialize the model itself; we'll just load it again
   // when we unserialize)
   const auto namPath = _EncodePresetAssetPath(mNAMPath);
-  const auto irPath = _EncodePresetAssetPath(mIRPath);
+  const auto paths = CabinetPaths();
   chunk.PutStr(namPath.Get());
-  chunk.PutStr(irPath.Get());
+  for (const auto& path : paths)
+    chunk.PutStr(_EncodePresetAssetPath(WDL_String(path.c_str())).Get());
   for (const auto& slot : mFXSlots)
   {
     const auto fxPath = _EncodePresetAssetPath(slot->path);
@@ -766,14 +768,7 @@ void NeuralAmpModeler::OnUIOpen()
       SendControlMsgFromDelegate(kCtrlTagModelFileBrowser, kMsgTagLoadFailed);
   }
 
-  if (mIRPath.GetLength())
-  {
-    SendControlMsgFromDelegate(kCtrlTagIRFileBrowser, kMsgTagLoadedIR, mIRPath.GetLength(), mIRPath.Get());
-    if (mIR == nullptr && mStagedIR == nullptr)
-      SendControlMsgFromDelegate(kCtrlTagIRFileBrowser, kMsgTagLoadFailed);
-  }
-  else if (GetUI())
-    GetUI()->GetControlWithTag(kCtrlTagIRFileBrowser)->As<NAMFileBrowserControl>()->ClearDisplayedFile();
+  _RefreshCabinet();
 
   if (mModel != nullptr)
   {
@@ -852,7 +847,7 @@ void NeuralAmpModeler::OnParamChange(int paramIdx)
     case kSlim: _ApplySlimParamToLoadedNAMs(); break;
     case kFXChainEnabled: _UpdateLatency(); break;
     default:
-      if (paramIdx >= kFXParamBase && ((paramIdx - kFXParamBase) % kNumFXParamsPerSlot) == kFXEnabledOffset)
+      if (paramIdx >= kFXParamBase && paramIdx < kMicALevel && ((paramIdx - kFXParamBase) % kNumFXParamsPerSlot) == kFXEnabledOffset)
         _UpdateLatency();
       break;
   }
@@ -881,7 +876,7 @@ bool NeuralAmpModeler::OnMessage(int msgTag, int ctrlTag, int dataSize, const vo
   switch (msgTag)
   {
     case kMsgTagClearModel: mShouldRemoveModel = true; return true;
-    case kMsgTagClearIR: mShouldRemoveIR = true; return true;
+    case kMsgTagClearIR: SelectCabinet({std::string{}, std::string{}}); return true;
     case kMsgTagClearFXModel: ClearFXModel(mFXEditorSlot.load()); return true;
     case kMsgTagHighlightColor:
     {
@@ -996,12 +991,7 @@ void NeuralAmpModeler::_ApplyDSPStaging()
     _SetInputGain();
     _SetOutputGain();
   }
-  if (mShouldRemoveIR)
-  {
-    mIR = nullptr;
-    mIRPath.Set("");
-    mShouldRemoveIR = false;
-  }
+
   // Move things from staged to live
   if (mStagedModel != nullptr)
   {
@@ -1012,11 +1002,7 @@ void NeuralAmpModeler::_ApplyDSPStaging()
     _SetInputGain();
     _SetOutputGain();
   }
-  if (mStagedIR != nullptr)
-  {
-    mIR = std::move(mStagedIR);
-    mStagedIR = nullptr;
-  }
+
   for (auto& slot : mFXSlots)
   {
     if (slot->shouldRemove.exchange(false))
@@ -1085,25 +1071,8 @@ void NeuralAmpModeler::_ResetModelAndIR(const double sampleRate, const int maxBl
     slot->toneStack->Reset(sampleRate, maxBlockSize);
   }
 
-  // IR
-  if (mStagedIR != nullptr)
-  {
-    const double irSampleRate = mStagedIR->GetSampleRate();
-    if (irSampleRate != sampleRate)
-    {
-      const auto irData = mStagedIR->GetData();
-      mStagedIR = std::make_unique<dsp::ImpulseResponse>(irData, sampleRate);
-    }
-  }
-  else if (mIR != nullptr)
-  {
-    const double irSampleRate = mIR->GetSampleRate();
-    if (irSampleRate != sampleRate)
-    {
-      const auto irData = mIR->GetData();
-      mStagedIR = std::make_unique<dsp::ImpulseResponse>(irData, sampleRate);
-    }
-  }
+  mCabinet.Reset(sampleRate, maxBlockSize);
+  mCabinetChanged = true;
 }
 
 void NeuralAmpModeler::_SetInputGain()
@@ -1240,43 +1209,25 @@ std::string NeuralAmpModeler::_StageFXModel(int slotIndex, const WDL_String& mod
   return "";
 }
 
-dsp::wav::LoadReturnCode NeuralAmpModeler::_StageIR(const WDL_String& irPath)
+nam_cabinet::Mixer::Result NeuralAmpModeler::SelectCabinet(const nam_cabinet::Mixer::Changes& changes)
 {
-  // FIXME it'd be better for the path to be "staged" as well. Just in case the
-  // path and the model got caught on opposite sides of the fence...
-  WDL_String previousIRPath = mIRPath;
-  const double sampleRate = GetSampleRate();
-  dsp::wav::LoadReturnCode wavState = dsp::wav::LoadReturnCode::ERROR_OTHER;
-  try
-  {
-    auto irPathU8 = std::filesystem::u8path(irPath.Get());
-    mStagedIR = std::make_unique<dsp::ImpulseResponse>(irPathU8.string().c_str(), sampleRate);
-    wavState = mStagedIR->GetWavState();
-  }
-  catch (std::runtime_error& e)
-  {
-    wavState = dsp::wav::LoadReturnCode::ERROR_OTHER;
-    std::cerr << "Caught unhandled exception while attempting to load IR:" << std::endl;
-    std::cerr << e.what() << std::endl;
-  }
+  auto result = mCabinet.Select(changes);
+  if (result.status == nam_cabinet::Mixer::Status::SUCCESS) mCabinetChanged = true;
+  return result;
+}
 
-  if (wavState == dsp::wav::LoadReturnCode::SUCCESS)
-  {
-    mShouldRemoveIR = false;
-    mIRPath = irPath;
-    SendControlMsgFromDelegate(kCtrlTagIRFileBrowser, kMsgTagLoadedIR, mIRPath.GetLength(), mIRPath.Get());
-  }
-  else
-  {
-    if (mStagedIR != nullptr)
-    {
-      mStagedIR = nullptr;
-    }
-    mIRPath = previousIRPath;
-    SendControlMsgFromDelegate(kCtrlTagIRFileBrowser, kMsgTagLoadFailed);
-  }
-
-  return wavState;
+void NeuralAmpModeler::_RefreshCabinet()
+{
+  if (!GetUI()) return;
+  const auto paths = CabinetPaths();
+  const auto& displayed = paths[0].empty() ? paths[1] : paths[0];
+  auto* browser = GetUI()->GetControlWithTag(kCtrlTagIRFileBrowser)->As<NAMFileBrowserControl>();
+  if (displayed.empty()) browser->ClearDisplayedFile();
+  else if (browser->CurrentFile() != displayed)
+    browser->OnMsgFromDelegate(kMsgTagLoadedIR, static_cast<int>(displayed.size()), displayed.c_str());
+  auto* page = GetUI()->GetControlWithTag(kCtrlTagCabinetPage)->As<NAMCabinetPageControl>();
+  page->Sync(paths);
+  page->UpdateMixControls();
 }
 
 size_t NeuralAmpModeler::_GetBufferNumChannels() const
@@ -1368,21 +1319,16 @@ void NeuralAmpModeler::_ProcessInput(iplug::sample** inputs, const size_t nFrame
 }
 
 void NeuralAmpModeler::_ProcessOutput(iplug::sample** inputs, iplug::sample** outputs, const size_t nFrames,
-                                      const size_t nChansIn, const size_t nChansOut)
+                                      const size_t nChansOut)
 {
   const double gain = mOutputGain;
-  // Assume _PrepareBuffers() was already called
-  if (nChansIn != 1)
-    throw std::runtime_error("Plugin is supposed to process in mono.");
-  // Broadcast the internal mono stream to all output channels.
-  const size_t cin = 0;
   for (auto cout = 0; cout < nChansOut; cout++)
     for (auto s = 0; s < nFrames; s++)
 #ifdef APP_API // Ensure valid output to interface
-      outputs[cout][s] = std::clamp(gain * inputs[cin][s], -1.0, 1.0);
+      outputs[cout][s] = std::clamp(gain * inputs[cout][s], -1.0, 1.0);
 #else // In a DAW, other things may come next and should be able to handle large
       // values.
-      outputs[cout][s] = gain * inputs[cin][s];
+      outputs[cout][s] = gain * inputs[cout][s];
 #endif
 }
 
@@ -1452,10 +1398,9 @@ void NeuralAmpModeler::_UpdateLatency()
 void NeuralAmpModeler::_UpdateMeters(sample** inputPointer, sample** outputPointer, const size_t nFrames,
                                      const size_t nChansIn, const size_t nChansOut)
 {
-  // Right now, we didn't specify MAXNC when we initialized these, so it's 1.
-  const int nChansHack = 1;
-  mInputSender.ProcessBlock(inputPointer, (int)nFrames, kCtrlTagInputMeter, nChansHack);
-  mOutputSender.ProcessBlock(outputPointer, (int)nFrames, kCtrlTagOutputMeter, nChansHack);
+  mInputSender.ProcessBlock(inputPointer, (int)nFrames, kCtrlTagInputMeter, static_cast<int>(nChansIn));
+  sample* stereoMeter[] = {outputPointer[0], outputPointer[nChansOut > 1 ? 1 : 0]};
+  mOutputSender.ProcessBlock(stereoMeter, static_cast<int>(nFrames), kCtrlTagOutputMeter, 2);
 }
 
 // HACK

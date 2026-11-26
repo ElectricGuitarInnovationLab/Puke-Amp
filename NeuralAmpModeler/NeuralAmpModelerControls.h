@@ -289,10 +289,12 @@ public:
 
   const std::string& CurrentFile() const { return mCurrentFile; }
 
-  void OpenLibraryMenu(const IRECT& bounds)
+  void OpenLibraryMenu(const IRECT& bounds, IFileDialogCompletionHandlerFunc load = nullptr,
+                       const std::string* selectedFile = nullptr)
   {
-    RefreshLibraryMenu();
+    RefreshLibraryMenu(selectedFile);
     CheckSelectedItem();
+    mMenuLoad = std::move(load);
     mMenuOpen = true;
     GetUI()->CreatePopupMenu(*this, mMainMenu, bounds);
   }
@@ -300,6 +302,7 @@ public:
   void OnPopupMenuSelection(IPopupMenu* pSelectedMenu, int valIdx) override
   {
     mMenuOpen = false;
+    auto load = std::move(mMenuLoad);
     if (!pSelectedMenu || !pSelectedMenu->GetChosenItem())
       return;
     auto* item = pSelectedMenu->GetChosenItem();
@@ -326,7 +329,13 @@ public:
     else
     {
       mSelectedItemIndex = mItems.Find(item);
-      LoadFileAtCurrentIndex();
+      if (load && mSelectedItemIndex >= 0)
+      {
+        WDL_String file;
+        GetSelectedFile(file);
+        load(file, WDL_String());
+      }
+      else LoadFileAtCurrentIndex();
     }
   }
 
@@ -542,21 +551,22 @@ private:
     return bundled == "Amp" ? "Amps" : bundled == "FX" ? "Pedals" : "IRs";
   }
 
-  void RefreshLibraryMenu()
+  void RefreshLibraryMenu(const std::string* selectedFile = nullptr)
   {
+    const auto& file = selectedFile ? *selectedFile : mCurrentFile;
     ClearPathList();
     AddBundledModelsPath(false);
     const auto directory = nam_library::UserLibrary().Category(LibraryCategory());
     AddPath(nam_library::PathString(directory).c_str(), "My Library");
     SetupMenu();
-    SetSelectedFile(mCurrentFile.c_str());
+    SetSelectedFile(file.c_str());
     // Keep the existing ability to audition files without importing them.
-    if (!mCurrentFile.empty() && mSelectedItemIndex == -1)
+    if (!file.empty() && mSelectedItemIndex == -1)
     {
-      const auto parent = std::filesystem::u8path(mCurrentFile).parent_path();
+      const auto parent = std::filesystem::u8path(file).parent_path();
       AddPath(nam_library::PathString(parent).c_str(), "Current Folder");
       SetupMenu();
-      SetSelectedFile(mCurrentFile.c_str());
+      SetSelectedFile(file.c_str());
     }
     mMainMenu.AddSeparator();
     mImportFileItem = mMainMenu.AddItem("Import File…");
@@ -692,6 +702,7 @@ private:
     }
   }
 
+  IFileDialogCompletionHandlerFunc mMenuLoad;
   bool mMenuOpen = false;
   std::string mCurrentFile;
   std::future<nam_library::ImportResult> mImport;
@@ -1054,30 +1065,31 @@ private:
   std::vector<std::pair<IPopupMenu::Item*, std::string>> mRemoveFolderItems;
 };
 
-class NAMMeterControl : public IVPeakAvgMeterControl<>
+template <int Channels>
+class NAMMeterControl : public IVPeakAvgMeterControl<Channels>
 {
   static constexpr float KMeterMin = -70.0f;
   static constexpr float KMeterMax = -0.01f;
 public:
   NAMMeterControl(const IRECT& bounds, const IVStyle& style)
-  : IVPeakAvgMeterControl<>(bounds, "", style.WithShowValue(false).WithShowLabel(false)
+  : IVPeakAvgMeterControl<Channels>(bounds, "", style.WithShowValue(false).WithShowLabel(false)
                               .WithDrawFrame(false).WithWidgetFrac(1.f).WithColor(kX1, PluginColors::TEXT),
                             EDirection::Vertical, {}, 0, KMeterMin, KMeterMax, {})
   {
-    SetPeakSize(2.f);
-    mPeakValues.fill(0.f);
-    SetIgnoreMouse(true);
+    this->SetPeakSize(2.f);
+    this->mPeakValues.fill(0.f);
+    this->SetIgnoreMouse(true);
   }
 
   void DrawBackground(IGraphics& g, const IRECT& r) override
   {
-    g.FillRoundRect(PluginColors::BACKGROUND, r, 3.f, &mBlend);
+    g.FillRoundRect(PluginColors::BACKGROUND, r, 3.f, &this->mBlend);
   }
 
   void DrawTrackHandle(IGraphics& g, const IRECT& r, int chIdx, bool aboveBaseValue) override
   {
     if (r.H() > 1.f)
-      g.FillRect(PluginColors::NAM_THEMECOLOR, r, &mBlend);
+      g.FillRect(PluginColors::NAM_THEMECOLOR, r, &this->mBlend);
   }
 };
 
