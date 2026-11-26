@@ -28,9 +28,17 @@ when using stereo. **Invert polarity** reverses Mic B. Two identical recordings 
 unity and center add about 6 dB, or cancel when B is inverted. Use the stereo output
 meter to check peaks while blending.
 
-The current library has positions at **0, 1, 2, and 5 inches** on each axis for five
+The Orange PPC112 has positions at **0, 1, 2, and 5 inches** on each axis for five
 microphone choices at **0 or 45 degrees**. Royer front and back share the supplied
-Royer artwork. Both mics snap to actual recordings on one physical scale.
+Royer artwork. Both mics snap to recorded distances on the same scale.
+
+The Mesa Boogie Thiele 1x12 / Celestion C90 has two room captures each for the
+Neumann TLM 103 and Shure SM57. Select a mic row, then choose **Inside booth**
+or **Outside booth** under **Atmosphere**. Inside was recorded in the isolation
+booth. Outside was recorded from the room with the booth door open. The two dots
+below the distance grid correspond to these buttons. Left and right arrow keys
+switch between booth positions. When a mic has both kinds of capture, the up
+arrow returns to the measured grid and the down arrow leaves its bottom edge.
 
 The page's **IR library / import...** button targets the selected row. Imported
 recordings without placement metadata appear as **Custom IR** and have level, pan,
@@ -115,6 +123,13 @@ when creating future assets; large source canvases consume more graphics memory.
 - Unrecognized names remain available through the ordinary IR library menu but
   are not assigned speculative graphical positions.
 
+Room captures use a named placement in the same filename slot as the measured
+distances. The shipped suffixes are `AtmosphericInside_G11B_LL` and
+`AtmosphericOutside_G11B_LL`. The parser also accepts the prefix `Atmosphere`
+and permits omission of `_G11B` and `_LL`. A cabinet/mic combination can have
+either booth position, both, or a mix of booth and measured positions. Each
+booth position uses the straight-on mic artwork.
+
 For example, `Orange_Celestion_V30_Royer_back_121_0_from_center_1_from_grill_45_offset_LL.wav`
 selects Royer back, 0 inches from center, 1 inch from grille, and `r121_45.png`.
 `Orange_Celestion_V30_Shure_SM57_2_from_center_2_from_grill_LL.wav` selects the
@@ -129,8 +144,8 @@ cd /tmp/nam-library-tests
 ctest -R cabinet_catalog --output-on-failure
 ```
 
-The test checks all 163 current WAVs, both example mappings, image references,
-each microphone/angle's position grid, snapping, aliases, sparse sets, fractional
+The test checks all 167 current WAVs, both example mappings, image references,
+booth locations and the Orange position grids, snapping, aliases, sparse sets, fractional
 positions, malformed catalogs, and adding a cabinet/mic through data alone. Update
 the expected shipped counts/grid in the test when intentionally expanding the
 factory library. The same target is part of the existing asset-library CI job.

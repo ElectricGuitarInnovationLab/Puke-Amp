@@ -14,6 +14,19 @@
         ]
       },
       "source_pixels_per_inch": 260
+    },
+    {
+      "id": "mesa-boogie-thiele-c90",
+      "name": "Mesa Boogie Thiele 1x12 / Celestion C90",
+      "filename_prefix": "MesaBoogie_Thiele_Celestion_C90",
+      "image": {
+        "path": "GUI/cabs/thiele112.png",
+        "anchor": [
+          5808,
+          5060
+        ]
+      },
+      "source_pixels_per_inch": 260
     }
   ],
   "microphones": [
@@ -118,6 +131,27 @@
           "anchor": [
             1880,
             130
+          ]
+        }
+      }
+    },
+    {
+      "id": "neumann-tlm103",
+      "name": "Neumann TLM 103",
+      "filename_token": "Neumann_TLM103",
+      "images": {
+        "0": {
+          "path": "GUI/mics/tlm103.png",
+          "anchor": [
+            1960,
+            280
+          ]
+        },
+        "45": {
+          "path": "GUI/mics/tlm103_45.png",
+          "anchor": [
+            1910,
+            300
           ]
         }
       }

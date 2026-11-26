@@ -35,7 +35,9 @@ Mic B starts off and has a polarity switch for blending captures.
 Rightward movement changes distance from the speaker center, and downward movement
 changes distance from the grille. The Orange PPC112 / Vintage 30 library offers
 Royer 121 front/back, Sennheiser e609, Sennheiser MD421-II, and Shure SM57 captures
-at 0, 1, 2, and 5 inches. Each row can also use a custom WAV from **IR library / import...**.
+at 0, 1, 2, and 5 inches. The Mesa Boogie Thiele 1x12 / Celestion C90 offers
+Neumann TLM 103 and Shure SM57 room captures. Use **Inside booth** or **Outside booth**
+below the graphic to select the room position for the active mic. Each row can also use a custom WAV from **IR library / import...**.
 See [the cabinet library guide](Models/CABINET_LIBRARY.md) for the filename rules,
 graphics alignment, and how to extend the JSON catalog with new cabinets and mics.
 

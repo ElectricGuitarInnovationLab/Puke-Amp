@@ -10,9 +10,9 @@ int main(int argc, char** argv)
   assert(argc == 2);
   const fs::path root = fs::u8path(argv[1]);
   const auto catalog = Catalog::Load(root);
-  assert(catalog.cabinets.size() == 1);
-  assert(catalog.microphones.size() == 5);
-  assert(catalog.recordings.size() == 163);
+  assert(catalog.cabinets.size() == 2);
+  assert(catalog.microphones.size() == 6);
+  assert(catalog.recordings.size() == 167);
   size_t wavCount = 0;
   for (const auto& file : fs::recursive_directory_iterator(root / "IR"))
     if (file.path().extension() == ".wav")
@@ -56,6 +56,28 @@ int main(int argc, char** argv)
   const auto omitted = catalog.Find(root / "IR/Orange_Celestion_V30_Royer_front_121_0_from_center_LL.wav");
   assert(omitted >= 0 && catalog.recordings[omitted].grill == 0);
 
+  const size_t mesa = 1, tlm = 5, shure = s.microphone;
+  assert(catalog.cabinets[mesa].image.path.filename() == "thiele112.png");
+  assert(catalog.microphones[tlm].images.at(0).path.filename() == "tlm103.png");
+  for (size_t mic : {tlm, shure})
+  {
+    assert(catalog.Positions(mesa, mic, 0).empty());
+    assert(catalog.Nearest(mesa, mic, 0, 0, 0) == -1);
+    for (auto place : {Placement::Inside, Placement::Outside})
+    {
+      const int index = catalog.RoomPosition(mesa, mic, place);
+      assert(index >= 0);
+      const auto token = place == Placement::Inside ? "Inside" : "Outside";
+      const auto name = catalog.cabinets[mesa].prefix + "_" + catalog.microphones[mic].token
+                      + "_Atmospheric" + token + "_G11B_LL.wav";
+      assert(catalog.Find(root / "IR" / name) == index);
+      const auto other = mic == tlm ? shure : tlm;
+      assert(catalog.Match(catalog.recordings[index], mesa, other) == catalog.RoomPosition(mesa, other, place));
+    }
+  }
+  assert(catalog.RoomPosition(0, shure, Placement::Inside) == -1);
+  assert(catalog.Match(s, mesa, shure) == catalog.RoomPosition(mesa, shure, Placement::Inside));
+
   const auto temp = fs::temp_directory_path() / ("nam-cabinet-" + std::to_string(
     std::chrono::steady_clock::now().time_since_epoch().count()));
   struct Cleanup { fs::path path; ~Cleanup() { fs::remove_all(path); } } cleanup{temp};
@@ -91,16 +113,22 @@ int main(int argc, char** argv)
   const auto second = temp / "IR/nested/New_Cab_New_Mic(M)_5_from_center_0_from_grill_LL.wav";
   std::ofstream(first).put('x');
   std::ofstream(second).put('x');
+  const auto outside = temp / "IR/nested/New_Cab_New_Mic(M)_AtmosphericOutside_G11B_LL.wav";
+  std::ofstream(outside).put('x');
   std::ofstream(temp / "IR/unmapped.wav").put('x');
   auto write = [&] { std::ofstream(temp / "cabinet-library.json") << document.dump(2); };
   write();
   const auto extended = Catalog::Load(temp);
-  assert(extended.recordings.size() == 2);
+  assert(extended.recordings.size() == 3);
   assert(extended.Find(first) >= 0);
   const auto& fractional = extended.recordings[extended.Find(first)];
   assert(fractional.center == 1.5f && fractional.grill == 3.f && fractional.angle == 45);
-  assert(extended.Nearest(1, 5, 45, 5, 0) == extended.Find(first)); // Sparse set: never fabricate an IR.
-  assert(extended.Nearest(1, 5, 0, 1.5f, 3) == extended.Find(second));
+  assert(extended.Nearest(2, 6, 45, 5, 0) == extended.Find(first)); // Sparse set: never fabricate an IR.
+  assert(extended.Nearest(2, 6, 0, 1.5f, 3) == extended.Find(second));
+  assert(extended.RoomPosition(2, 6, Placement::Inside) == -1);
+  assert(extended.RoomPosition(2, 6, Placement::Outside) == extended.Find(outside));
+  assert(extended.Match(fractional, 2, 6) == extended.Find(first));
+  assert(extended.Match(extended.recordings[extended.Find(outside)], 2, 6) == extended.Find(outside));
   assert(extended.Find(temp / first.filename()) == -1); // Same basename is not the same recording.
   assert(catalog.Find(first) == -1);
 
@@ -123,7 +151,7 @@ int main(int argc, char** argv)
   document["cabinets"][0]["image"]["path"] = "GUI/missing.png";
   rejected();
   document = valid;
-  document["microphones"][5]["images"].erase("45");
+  document["microphones"][6]["images"].erase("45");
   rejected();
-  std::cout << "Validated all 163 bundled IRs, snapping, aliases, sparse positions, extension and invalid catalogs.\n";
+  std::cout << "Validated all 167 bundled IRs, snapping, aliases, sparse positions, extension and invalid catalogs.\n";
 }

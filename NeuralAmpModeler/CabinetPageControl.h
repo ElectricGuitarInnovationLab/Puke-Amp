@@ -124,18 +124,41 @@ public:
       MenuButton(g, MicBounds(i), mic.c_str());
       if (catalog && mLoaded[i] >= 0)
       {
-        const auto angle = std::to_string(Recording(i).angle) + "°";
-        MenuButton(g, AngleBounds(i), angle.c_str());
+        const auto& r = Recording(i);
+        if (r.placement == Placement::Measured)
+          MenuButton(g, AngleBounds(i), (std::to_string(r.angle) + "°").c_str());
+        else
+          Text(g, r.placement == Placement::Inside ? "Inside" : "Outside", AngleBounds(i), 12.f);
       }
     }
+    const bool rooms = catalog && CanPlace() && HasRoomPositions();
+    if (rooms)
+    {
+      Text(g, "Atmosphere", Box(22, 310, 97, 334), 12.f);
+      for (auto place : {Placement::Inside, Placement::Outside})
+      {
+        if (RoomIndex(place) < 0)
+          continue;
+        const auto bounds = RoomBounds(place);
+        Button(g, bounds, place == Placement::Inside ? "Inside booth" : "Outside booth");
+        if (mLoaded[mActive] >= 0 && Recording(mActive).placement == place)
+          g.DrawRoundRect(PluginColors::NAM_THEMECOLOR, bounds, 4.f);
+      }
+    }
+    std::string position;
     if (catalog && (mLoaded[mActive] >= 0 || mDragging))
     {
       const auto& r = Recording(mActive);
-      const auto position = Inches(r.center) + " from center  /  " + Inches(r.grill) + " from grille";
-      Text(g, position.c_str(), Box(22, 310, 295, 333), 12.f);
+      if (r.placement == Placement::Measured)
+        position = Inches(r.center) + " from center  /  " + Inches(r.grill) + " from grille";
+      else
+        position = r.placement == Placement::Inside ? "Inside the isolation booth" : "Outside the isolation booth, door open";
+      if (!rooms)
+        Text(g, position.c_str(), Box(22, 310, 295, 333), 12.f);
     }
     const char* hint = !mStatus.empty() ? mStatus.c_str()
                        : mDragging      ? "Release to load this position"
+                       : rooms          ? position.c_str()
                        : !catalog       ? "Use the IR library to select a custom recording."
                                         : "Select a mic row to edit. Drag, click a dot, or use the arrow keys.";
     Text(g, hint, Box(20, 334, 580, 359), 12.f, PluginColors::MUTED);
@@ -170,7 +193,8 @@ public:
         SetDirty(false);
         if (catalog && MicBounds(i).Contains(x, y))
           ShowMenu(Menu::Mic);
-        else if (catalog && mLoaded[i] >= 0 && AngleBounds(i).Contains(x, y))
+        else if (catalog && mLoaded[i] >= 0 && Recording(i).placement == Placement::Measured
+                 && AngleBounds(i).Contains(x, y))
           ShowMenu(Menu::Angle);
         return;
       }
@@ -181,15 +205,28 @@ public:
       ShowMenu(Menu::Speaker);
       return;
     }
+    if (!CanPlace())
+      return;
+    for (auto place : {Placement::Inside, Placement::Outside})
+      if (RoomBounds(place).Contains(x, y))
+      {
+        const int index = RoomIndex(place);
+        if (index >= 0)
+          SelectFile(mActive, Path(index));
+        return;
+      }
     if (!StageBounds().Contains(x, y))
       return;
-    if (!CanPlace())
+    if (GridAngle(Recording(mActive)) < 0 && y < RoomY() - 10.f)
       return;
     mDragging = true;
     const auto& r = Recording(mActive);
     bool onDot = false;
-    for (auto index : mCatalog.Positions(r.cabinet, r.microphone, r.angle))
+    for (auto index : mCatalog.Positions(r.cabinet, r.microphone, GridAngle(r)))
       onDot |= std::hypot(x - X(mCatalog.recordings[index]), y - Y(mCatalog.recordings[index])) < 6.f;
+    for (auto place : {Placement::Inside, Placement::Outside})
+      if (RoomIndex(place) >= 0)
+        onDot |= std::hypot(x - RoomBounds(place).MW(), y - RoomY()) < 6.f;
     const auto micBounds = IRECT(X(r) - 15, Y(r) - 15, X(r) + (r.angle ? 85 : 15), Y(r) + 85);
     mDragX = !onDot && micBounds.Contains(x, y) ? x - X(r) : 0.f;
     mDragY = !onDot && micBounds.Contains(x, y) ? y - Y(r) : 0.f;
@@ -225,6 +262,18 @@ public:
     if (!dx && !dy)
       return false;
     const auto current = mCatalog.recordings[mPreview[mActive]];
+    if (current.placement != Placement::Measured)
+    {
+      int index = -1;
+      if (dx)
+        index = RoomIndex(dx < 0 ? Placement::Inside : Placement::Outside);
+      else if (dy < 0)
+        index = mCatalog.Nearest(current.cabinet, current.microphone, GridAngle(current),
+                                 (X(current) - OriginX()) / mStep, (RoomY() - OriginY()) / mStep);
+      if (index >= 0 && index != mLoaded[mActive])
+        SelectFile(mActive, Path(index));
+      return true;
+    }
     float best = std::numeric_limits<float>::max();
     for (auto index : mCatalog.Positions(current.cabinet, current.microphone, current.angle))
     {
@@ -242,6 +291,8 @@ public:
     }
     if (best < std::numeric_limits<float>::max())
       CommitPosition();
+    else if (dy > 0 && HasRoomPositions())
+      SelectFile(mActive, Path(NearestRoom(X(current))));
     return true;
   }
 
@@ -261,12 +312,12 @@ public:
       nam_cabinet::Mixer::Changes edits;
       for (int i = 0; i < 2; ++i)
         if (mLoaded[i] >= 0 || (mLoaded[1 - i] < 0 && i == mActive))
-          edits[i] = Path(Nearest(Recording(i), choice, Recording(i).microphone, Recording(i).angle));
+          edits[i] = Path(mCatalog.Match(Recording(i), choice, Recording(i).microphone));
       Apply(edits);
       return;
     }
-    const int index = Nearest(
-      r, r.cabinet, mMenuKind == Menu::Mic ? choice : r.microphone, mMenuKind == Menu::Angle ? choice : r.angle);
+    const int index = mMenuKind == Menu::Mic ? mCatalog.Match(r, r.cabinet, choice)
+                                             : mCatalog.Nearest(r.cabinet, r.microphone, choice, r.center, r.grill);
     SelectFile(mActive, Path(index));
   }
 
@@ -282,18 +333,32 @@ private:
   std::string Path(int index) const { return nam_cabinet::PathString(mCatalog.recordings[index].path); }
   bool CanPlace() const { return mLoaded[mActive] >= 0 || (!mActive && mPaths[0].empty()); }
 
-  int Nearest(const nam_cabinet::Recording& r, size_t cab, size_t mic, int angle) const
+  using Placement = nam_cabinet::Placement;
+
+  int RoomIndex(Placement place) const
   {
-    int index = mCatalog.Nearest(cab, mic, angle, r.center, r.grill);
-    if (index >= 0)
-      return index;
+    const auto& r = Recording(mActive);
+    return mCatalog.RoomPosition(r.cabinet, r.microphone, place);
+  }
+
+  bool HasRoomPositions() const { return RoomIndex(Placement::Inside) >= 0 || RoomIndex(Placement::Outside) >= 0; }
+
+  int NearestRoom(float x) const
+  {
+    const int inside = RoomIndex(Placement::Inside), outside = RoomIndex(Placement::Outside);
+    if (inside < 0 || outside < 0)
+      return std::max(inside, outside);
+    return x < (RoomBounds(Placement::Inside).MW() + RoomBounds(Placement::Outside).MW()) / 2 ? inside : outside;
+  }
+
+  int GridAngle(const nam_cabinet::Recording& r) const
+  {
+    if (r.placement == Placement::Measured)
+      return r.angle;
     for (const auto& item : mCatalog.recordings)
-      if (item.cabinet == cab && item.microphone == mic)
-        return mCatalog.Nearest(cab, mic, item.angle, r.center, r.grill);
-    for (const auto& item : mCatalog.recordings)
-      if (item.cabinet == cab)
-        return mCatalog.Nearest(cab, item.microphone, item.angle, r.center, r.grill);
-    throw std::logic_error("Selected cabinet has no recordings");
+      if (item.cabinet == r.cabinet && item.microphone == r.microphone && item.placement == Placement::Measured)
+        return item.angle;
+    return -1;
   }
 
   nam_cabinet::Mixer::Result SelectFile(int slot, const std::string& file)
@@ -307,7 +372,7 @@ private:
       const auto& r = Recording(other);
       const auto cab = mCatalog.recordings[index].cabinet;
       if (r.cabinet != cab)
-        edits[other] = Path(Nearest(r, cab, r.microphone, r.angle));
+        edits[other] = Path(mCatalog.Match(r, cab, r.microphone));
     }
     return Apply(edits);
   }
@@ -332,8 +397,13 @@ private:
   void PreviewAt(float x, float y)
   {
     const auto& r = Recording(mActive);
-    mPreview[mActive] =
-      mCatalog.Nearest(r.cabinet, r.microphone, r.angle, (x - OriginX()) / mStep, (y - OriginY()) / mStep);
+    const int angle = GridAngle(r);
+    const int room = NearestRoom(x);
+    const bool roomRow = room >= 0 && (angle < 0 || y >= RoomY() - 10.f);
+    mPreview[mActive] = roomRow ? room : mCatalog.Nearest(r.cabinet, r.microphone, angle,
+                                                          (x - OriginX()) / mStep, (y - OriginY()) / mStep);
+    if (Recording(mActive).angle != r.angle)
+      LoadArtwork();
     SetDirty(false);
   }
 
@@ -350,7 +420,7 @@ private:
         values.insert(static_cast<int>(item.cabinet));
       if (kind == Menu::Mic && item.cabinet == r.cabinet)
         values.insert(static_cast<int>(item.microphone));
-      if (kind == Menu::Angle && item.cabinet == r.cabinet && item.microphone == r.microphone)
+      if (kind == Menu::Angle && item.placement == Placement::Measured && item.cabinet == r.cabinet && item.microphone == r.microphone)
         values.insert(item.angle);
     }
     mValues.assign(values.begin(), values.end());
@@ -447,15 +517,27 @@ private:
     g.FillRoundRect(PluginColors::PANEL, stage, 6.f);
     g.PathClipRegion(stage);
     artwork(mCabBitmap, cab.image, OriginX(), OriginY());
-    g.DrawLine(PluginColors::MUTED, OriginX(), OriginY(), OriginX() + 60, OriginY());
-    g.DrawLine(PluginColors::MUTED, OriginX(), OriginY(), OriginX(), OriginY() + 60);
+    const int gridAngle = GridAngle(selected);
+    if (gridAngle >= 0)
+    {
+      g.DrawLine(PluginColors::MUTED, OriginX(), OriginY(), OriginX() + 60, OriginY());
+      g.DrawLine(PluginColors::MUTED, OriginX(), OriginY(), OriginX(), OriginY() + 60);
+    }
     if (CanPlace())
-      for (auto index : mCatalog.Positions(selected.cabinet, selected.microphone, selected.angle))
-      {
-        const auto& r = mCatalog.recordings[index];
+    {
+      auto dot = [&](const nam_cabinet::Recording& r) {
         g.FillCircle(COLOR_BLACK, X(r), Y(r), 3.f);
         g.DrawCircle(COLOR_WHITE, X(r), Y(r), 3.f);
+      };
+      for (auto index : mCatalog.Positions(selected.cabinet, selected.microphone, gridAngle))
+        dot(mCatalog.recordings[index]);
+      for (auto place : {Placement::Inside, Placement::Outside})
+      {
+        const int index = RoomIndex(place);
+        if (index >= 0)
+          dot(mCatalog.recordings[index]);
       }
+    }
     const int order[] = {1 - mActive, mActive};
     for (int i : order)
     {
@@ -491,8 +573,13 @@ private:
   IRECT ClearBounds() const { return Box(466, 365, 576, 390); }
   float OriginX() const { return mRECT.L + 150.f; }
   float OriginY() const { return mRECT.T + 165.f; }
-  float X(const nam_cabinet::Recording& r) const { return OriginX() + r.center * mStep; }
-  float Y(const nam_cabinet::Recording& r) const { return OriginY() + r.grill * mStep; }
+  IRECT RoomBounds(Placement place) const
+  { return place == Placement::Inside ? Box(99, 310, 191, 334) : Box(196, 310, 294, 334); }
+  float RoomY() const { return mRECT.T + 246.f; }
+  float X(const nam_cabinet::Recording& r) const
+  { return r.placement == Placement::Measured ? OriginX() + r.center * mStep : RoomBounds(r.placement).MW(); }
+  float Y(const nam_cabinet::Recording& r) const
+  { return r.placement == Placement::Measured ? OriginY() + r.grill * mStep : RoomY(); }
   static std::string Inches(float value)
   {
     std::ostringstream text;

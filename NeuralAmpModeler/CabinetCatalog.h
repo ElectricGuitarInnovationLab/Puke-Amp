@@ -45,12 +45,15 @@ struct Microphone
   std::map<int, Artwork> images;
 };
 
+enum class Placement { Measured, Inside, Outside };
+
 struct Recording
 {
   fs::path path;
   size_t cabinet = 0, microphone = 0;
   int angle = 0;
   float center = 0.f, grill = 0.f;
+  Placement placement = Placement::Measured;
   int preference = 0;
 };
 
@@ -112,6 +115,7 @@ public:
     // Tokens are compared literally (MD421II(M), for example, contains regex
     // metacharacters). Only the position suffix is parsed as a regular expression.
     const std::regex position(R"(^([0-9]+(?:\.[0-9]+)?)_from_center(?:_([0-9]+(?:\.[0-9]+)?)_from_grill)?(?:_(0|45)_offset)?(_LL)?$)");
+    const std::regex atmosphere(R"(^(?:Atmospheric|Atmosphere)(Inside|Outside)(?:_G11B)?(_LL)?$)");
     for (const auto& file : fs::recursive_directory_iterator(modelsRoot / "IR"))
     {
       if (!file.is_regular_file() || file.path().extension() != ".wav")
@@ -125,18 +129,26 @@ public:
             continue;
           std::smatch match;
           const auto suffix = stem.substr(prefix.size());
-          if (!std::regex_match(suffix, match, position))
-            continue;
           Recording recording;
           recording.path = file.path().lexically_normal();
           recording.cabinet = cab;
           recording.microphone = mic;
-          recording.center = std::stof(match[1].str());
-          recording.grill = match[2].matched ? std::stof(match[2].str()) : omittedGrill;
-          recording.angle = match[3].matched ? std::stoi(match[3].str()) : 0;
-          recording.preference = (match[2].matched ? 2 : 0) + (match[4].matched ? 1 : 0);
-          CheckDistance(recording.center);
-          CheckDistance(recording.grill);
+          if (std::regex_match(suffix, match, position))
+          {
+            recording.center = std::stof(match[1].str());
+            recording.grill = match[2].matched ? std::stof(match[2].str()) : omittedGrill;
+            recording.angle = match[3].matched ? std::stoi(match[3].str()) : 0;
+            recording.preference = (match[2].matched ? 2 : 0) + (match[4].matched ? 1 : 0);
+            CheckDistance(recording.center);
+            CheckDistance(recording.grill);
+          }
+          else if (std::regex_match(suffix, match, atmosphere))
+          {
+            recording.placement = match[1].str() == "Inside" ? Placement::Inside : Placement::Outside;
+            recording.preference = match[2].matched ? 1 : 0;
+          }
+          else
+            continue;
           if (!result.microphones[mic].images.count(recording.angle))
             throw std::runtime_error("Missing microphone artwork for " + PathString(file.path().filename()));
           result.recordings.push_back(recording);
@@ -155,7 +167,8 @@ public:
   {
     std::vector<size_t> positions;
     for (size_t i = 0; i < recordings.size(); ++i)
-      if (recordings[i].cabinet == cabinet && recordings[i].microphone == microphone && recordings[i].angle == angle)
+      if (recordings[i].cabinet == cabinet && recordings[i].microphone == microphone && recordings[i].angle == angle
+          && recordings[i].placement == Placement::Measured)
         positions.push_back(i);
     return positions;
   }
@@ -176,6 +189,43 @@ public:
       }
     }
     return nearest;
+  }
+
+  int RoomPosition(size_t cabinet, size_t microphone, Placement placement) const
+  {
+    for (size_t i = 0; i < recordings.size(); ++i)
+      if (recordings[i].cabinet == cabinet && recordings[i].microphone == microphone
+          && recordings[i].placement == placement)
+        return static_cast<int>(i);
+    return -1;
+  }
+
+  // Keep the microphone where possible, then match the booth location or nearest measured position.
+  int Match(const Recording& source, size_t cabinet, size_t microphone) const
+  {
+    auto any = std::find_if(recordings.begin(), recordings.end(), [=](const Recording& r) {
+      return r.cabinet == cabinet;
+    });
+    if (any == recordings.end())
+      return -1;
+    auto first = std::find_if(recordings.begin(), recordings.end(), [=](const Recording& r) {
+      return r.cabinet == cabinet && r.microphone == microphone;
+    });
+    if (first == recordings.end())
+      first = any;
+    microphone = first->microphone;
+    if (source.placement != Placement::Measured)
+    {
+      const int same = RoomPosition(cabinet, microphone, source.placement);
+      if (same >= 0)
+        return same;
+    }
+    const int nearest = Nearest(cabinet, microphone, source.angle, source.center, source.grill);
+    if (nearest >= 0)
+      return nearest;
+    if (first->placement == Placement::Measured)
+      return Nearest(cabinet, microphone, first->angle, source.center, source.grill);
+    return static_cast<int>(first - recordings.begin());
   }
 
   int Find(const fs::path& path) const
