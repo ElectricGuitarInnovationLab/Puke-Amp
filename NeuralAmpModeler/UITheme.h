@@ -39,6 +39,11 @@ inline iplug::igraphics::IVStyle LabelStyle(float size = 12.f,
   return ControlStyle().WithValueText(Text(size, color, align));
 }
 
+inline iplug::igraphics::IVStyle TitleStyle()
+{
+  return ControlStyle().WithValueText(Text(26.f, PluginColors::TEXT, iplug::igraphics::EAlign::Near).WithFont("Roboto-Bold"));
+}
+
 inline void DrawButton(iplug::igraphics::IGraphics& g, const iplug::igraphics::IRECT& bounds,
                        const char* label, bool hover = false, float size = 12.f,
                        const iplug::igraphics::IBlend* blend = nullptr)

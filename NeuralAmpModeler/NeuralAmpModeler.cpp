@@ -125,6 +125,7 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     pGraphics->EnableMultiTouch(true);
 
     pGraphics->LoadFont("Roboto-Regular", ROBOTO_FN);
+    pGraphics->LoadFont("Roboto-Bold", "Roboto-Bold.ttf");
     pGraphics->AttachPopupMenuControl(nam_ui::Text(13.f));
     auto* menu = pGraphics->GetPopupMenuControl();
     menu->SetPanelColor(PluginColors::PANEL);
@@ -212,7 +213,8 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
       pGraphics->AttachControl(new IVLabelControl(bounds, text, nam_ui::LabelStyle(size, color, EAlign::Near)))
         ->SetIgnoreMouse(true);
     };
-    addLabel(IRECT(62.f, 16.f, 270.f, 48.f), "PUKE AMP", 20.f, PluginColors::TEXT);
+    pGraphics->AttachControl(new IVLabelControl(IRECT(62.f, 12.f, 270.f, 50.f), "Puke Amp", nam_ui::TitleStyle()))
+      ->SetIgnoreMouse(true);
     addLabel(IRECT(24.f, 51.f, 200.f, 67.f), "PRESET", 10.f);
     addLabel(IRECT(36.f, 119.f, 220.f, 136.f), "AMPLIFIER", 10.f);
     addLabel(IRECT(24.f, 291.f, 90.f, 325.f), "AMP", 11.f);

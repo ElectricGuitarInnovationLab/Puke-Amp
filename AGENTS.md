@@ -27,6 +27,7 @@ project files when changing another format.
 | State migration and preset recall | [Unserialization.cpp](NeuralAmpModeler/Unserialization.cpp), `SerializeState` and `UnserializeState` in the plugin implementation |
 | Browser, pedal and settings controls, theme, and sizing | [NeuralAmpModelerControls.h](NeuralAmpModeler/NeuralAmpModelerControls.h), [UITheme.h](NeuralAmpModeler/UITheme.h), [EditorSize.h](NeuralAmpModeler/EditorSize.h) |
 | Import, filesystem references, and model/WAV validation | [AssetLibrary.h](NeuralAmpModeler/AssetLibrary.h), [UserLibrary.h](NeuralAmpModeler/UserLibrary.h), [AssetValidation.h](NeuralAmpModeler/AssetValidation.h) |
+| Acoustic-only VST3/AUv2 prototype, build and host checks | [Acoustic](Acoustic/README.md), [processor and editor](Acoustic/PukeAcoustic.cpp) |
 | Cabinet capture metadata, page gestures, and DSP | [CabinetCatalog.h](NeuralAmpModeler/CabinetCatalog.h), [CabinetPageControl.h](NeuralAmpModeler/CabinetPageControl.h), [CabinetMixer.h](NeuralAmpModeler/CabinetMixer.h) |
 | Bundled captures, cabinet artwork and presets | [Models](Models), [cabinet-library.json](Models/cabinet-library.json), [cabinet library guide](Models/CABINET_LIBRARY.md) |
 | Update notifications | [UpdateChecker.h](NeuralAmpModeler/UpdateChecker.h), `OnIdle` and `_PresentAvailableUpdate` in the plugin implementation |

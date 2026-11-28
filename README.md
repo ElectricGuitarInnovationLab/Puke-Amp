@@ -111,6 +111,8 @@ The original GitHub Actions workflows in the Neural Amp Modeler project also ser
 
 - https://github.com/sdatkinson/NeuralAmpModelerPlugin/tree/main/.github/workflows
 
+The separate [Puke Amp: Acoustic prototype](Acoustic/README.md) shares the dual IR mixer and has its own VST3 and macOS AUv2 build targets.
+
 ### Building Puke Amp VST3
 
 The easiest option is **Actions → Build Puke Amp VST3 → Run workflow** on GitHub. When both jobs finish, download the `Puke-Amp-VST3-macOS` or `Puke-Amp-VST3-Windows` artifact. Each artifact contains a ZIP with the complete `Puke Amp.vst3` bundle, including `Models/Amp`, `Models/FX`, `Models/IR`, and `Models/Presets`. The Windows artifact also contains a versioned `Puke-Amp-<version>-Windows-Setup-Unsigned.exe` installer.

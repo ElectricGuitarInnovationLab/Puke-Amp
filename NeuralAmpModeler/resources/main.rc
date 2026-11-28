@@ -274,6 +274,7 @@ END
 // Generated from the TEXTINCLUDE 3 resource.
 //
 #include "..\config.h"
+"Roboto-Bold.ttf" TTF "Roboto-Bold.ttf"
 ROBOTO_FN TTF ROBOTO_FN
 MICHROMA_FN TTF MICHROMA_FN
 FILE_FN SVG FILE_FN
