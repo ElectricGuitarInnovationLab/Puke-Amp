@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
-file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/config.h" version_line REGEX "^#define PLUG_VERSION_STR ")
-file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/config.h" version_hex_line REGEX "^#define PLUG_VERSION_HEX ")
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS config.h)
+set(amp_config "${CMAKE_CURRENT_SOURCE_DIR}/../NeuralAmpModeler/config.h")
+file(STRINGS "${amp_config}" version_line REGEX "^#define PLUG_VERSION_STR ")
+file(STRINGS "${amp_config}" version_hex_line REGEX "^#define PLUG_VERSION_HEX ")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${amp_config}")
 string(REGEX REPLACE "^#define PLUG_VERSION_STR \"([0-9]+\\.[0-9]+\\.[0-9]+)\"" "\\1" acoustic_version "${version_line}")
 string(REGEX REPLACE "^#define PLUG_VERSION_HEX (0x[0-9A-Fa-f]+)" "\\1" acoustic_version_hex "${version_hex_line}")
 math(EXPR acoustic_version_integer "${acoustic_version_hex}")
@@ -55,6 +56,7 @@ foreach(format IN LISTS formats)
     ${g}/Controls/IControls.cpp ${g}/Controls/IPopupMenuControl.cpp ${g}/Controls/ITextEntryControl.cpp)
   target_link_libraries(${target} PRIVATE acoustic_ir)
   target_compile_definitions(${target} PRIVATE ${format}_API IPLUG_EDITOR=1 IPLUG_DSP=1
+    PLUG_VERSION_STR="${PROJECT_VERSION}" PLUG_VERSION_HEX=${acoustic_version_hex}
     IGRAPHICS_NANOVG NOMINMAX $<$<CONFIG:Debug>:DEVELOPMENT=1> $<$<NOT:$<CONFIG:Debug>>:RELEASE=1>)
   target_include_directories(${target} PRIVATE . ${ip} ${ip}/Extras ${ip}/VST3 ${ip}/AUv2
     ${root}/iPlug2/WDL ${g} ${g}/Platforms ${g}/Drawing ${g}/Controls
@@ -115,12 +117,13 @@ foreach(format IN LISTS formats)
     configure_file(resources.rc.in resources.rc @ONLY)
     target_sources(${target} PRIVATE ${ip}/IPlugPaths.cpp ${g}/Platforms/IGraphicsWin.cpp
       "${CMAKE_CURRENT_BINARY_DIR}/resources.rc")
-    target_compile_definitions(${target} PRIVATE IGRAPHICS_GL2 WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
+    # IGraphicsWin relies on shell, common-dialog, and NT declarations from windows.h.
+    target_compile_definitions(${target} PRIVATE IGRAPHICS_GL2 _CRT_SECURE_NO_WARNINGS)
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/utf-8>)
     target_include_directories(${target} PRIVATE ${gdeps}/glad_GL2/include ${gdeps}/glad_GL2/src
       ${deps}/Build/src/freetype/include)
     target_link_directories(${target} PRIVATE "${deps}/Build/win/x64/$<CONFIG>")
-    target_link_libraries(${target} PRIVATE comctl32 wininet shlwapi winmm opengl32)
+    target_link_libraries(${target} PRIVATE comctl32 comdlg32 shell32 wininet shlwapi winmm opengl32)
   endif()
   set_target_properties(${target} PROPERTIES OUTPUT_NAME PukeAcoustic PREFIX "" SUFFIX "${suffix}"
     LIBRARY_OUTPUT_DIRECTORY "${binary_dir}/$<0:>" RUNTIME_OUTPUT_DIRECTORY "${binary_dir}/$<0:>")

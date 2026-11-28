@@ -1,7 +1,6 @@
 #define PLUG_NAME "Puke Amp: Acoustic"
 #define PLUG_MFR "Puke"
-#define PLUG_VERSION_HEX 0x00000100
-#define PLUG_VERSION_STR "0.1.0"
+// CMake supplies PLUG_VERSION_STR and PLUG_VERSION_HEX from Puke Amp's config.h.
 #define PLUG_UNIQUE_ID 'PkAc'
 #define PLUG_MFR_ID 'SDAa'
 #define PLUG_URL_STR "https://github.com/ElectricGuitarInnovationLab/Puke-Amp"
