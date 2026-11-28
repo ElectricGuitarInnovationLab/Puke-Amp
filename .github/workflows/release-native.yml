@@ -151,7 +151,6 @@ jobs:
     if: github.event_name == 'push' || inputs.build_windows
     needs: validate
     runs-on: windows-latest
-    env:
     steps:
       - name: Prepare Windows signing certificate
         shell: pwsh

@@ -2,7 +2,7 @@
 
 Version 1
 
-Thank you for your interest in contributing to PUKE STUDIO ("We" or "Us").
+Thank you for your interest in contributing to PUKE AMP ("We" or "Us").
 This contributor agreement ("Agreement") documents the rights granted by contributors to Us. To make this document effective, please sign it and submit it to Us by following the instructions described in [CONTRIBUTING.md](CONTRIBUTING.md) in the Puke Amp repository. This is a legally binding document, so please read it carefully before agreeing to it. The Agreement may cover more than one software project managed by Us.
 
 ## 1. Definitions
@@ -64,4 +64,4 @@ EXCEPT FOR THE EXPRESS WARRANTIES IN SECTION 3, THE CONTRIBUTION IS PROVIDED "AS
 
 5.5 If any provision of this Agreement is found void and unenforceable, such provision will be replaced to the extent possible with a provision that comes closest to the meaning of the original provision and which is enforceable. The terms and conditions set forth in this Agreement shall apply notwithstanding any failure of essential purpose of this Agreement or any limited remedy to the maximum extent possible under law.
 
-PUKE STUDIO Individual Contributor License Agreement (E-CLA-I)
+PUKE AMP Individual Contributor License Agreement (E-CLA-I)
