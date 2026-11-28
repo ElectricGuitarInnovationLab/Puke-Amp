@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cmath>
+#include "../config.h"
 #include "../EditorSize.h"
 #include "IPlugEditorDelegate.h"
 

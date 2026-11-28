@@ -27,7 +27,15 @@
 #define PLUG_HEIGHT 450
 #define PLUG_FPS 60
 #define PLUG_SHARED_RESOURCES 0
+#if defined(__APPLE__) && defined(VST3_API)
+#define PLUG_HOST_RESIZE 1
+#else
 #define PLUG_HOST_RESIZE 0
+#endif
+#define PLUG_MIN_WIDTH (PLUG_WIDTH / 2)
+#define PLUG_MIN_HEIGHT (PLUG_HEIGHT / 2)
+#define PLUG_MAX_WIDTH (PLUG_WIDTH * 4)
+#define PLUG_MAX_HEIGHT (PLUG_HEIGHT * 4)
 
 #define AUV2_ENTRY PukeAcoustic_Entry
 #define AUV2_ENTRY_STR "PukeAcoustic_Entry"

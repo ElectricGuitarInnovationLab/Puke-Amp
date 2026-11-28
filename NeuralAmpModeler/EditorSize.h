@@ -3,11 +3,11 @@
 #include <algorithm>
 #include <cmath>
 #include <numeric>
-#include "config.h"
 
 namespace nam_ui
 {
-// Use whole 3:2 steps so both dimensions are integral and there is no leftover
+// Use whole aspect-ratio steps from the including plugin's configured dimensions
+// so both dimensions are integral and there is no leftover
 // strip of host background. Follow whichever drag axis changed proportionally
 // more, so resizing from either a side or the bottom remains responsive.
 inline bool ConstrainEditorSize(int& width, int& height, int currentWidth, int currentHeight)

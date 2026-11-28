@@ -14,6 +14,12 @@ public:
   explicit PukeAcoustic(const InstanceInfo& info);
   void OnReset() override;
   void OnIdle() override;
+  bool ConstrainEditorResize(int& width, int& height) const override;
+#if defined(OS_MAC) && defined(VST3_API)
+  void OnParentWindowResize(int width, int height) override;
+  bool EditorResizeFromUI(int width, int height, bool needsPlatformResize) override;
+  void OnUIOpen() override;
+#endif
   void ProcessBlock(sample** inputs, sample** outputs, int frames) override;
   bool SerializeState(IByteChunk& chunk) const override;
   int UnserializeState(const IByteChunk& chunk, int pos) override;

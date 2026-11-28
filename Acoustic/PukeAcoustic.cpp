@@ -2,6 +2,7 @@
 #include "IPlug_include_in_plug_src.h"
 #include "IControls.h"
 #include "UITheme.h"
+#include "EditorSize.h"
 #include "IPlugPaths.h"
 #include "IRValidation.h"
 #include <fstream>
@@ -317,9 +318,17 @@ PukeAcoustic::PukeAcoustic(const InstanceInfo& info) : Plugin(info, MakeConfig(N
   }
 
   mMakeGraphicsFunc = [&]() {
-    return MakeGraphics(*this, PLUG_WIDTH, PLUG_HEIGHT, PLUG_FPS, GetScaleForScreen(PLUG_WIDTH, PLUG_HEIGHT));
+    auto* graphics = MakeGraphics(*this, PLUG_WIDTH, PLUG_HEIGHT, PLUG_FPS, 1.f);
+    graphics->SetScaleConstraints(static_cast<float>(PLUG_MIN_WIDTH) / PLUG_WIDTH,
+                                  static_cast<float>(PLUG_MAX_WIDTH) / PLUG_WIDTH);
+    return graphics;
   };
   mLayoutFunc = [&](IGraphics* g) {
+    if (g->NControls()) return;
+    g->SetLayoutOnResize(false);
+#if !defined(OS_MAC) || !defined(VST3_API)
+    g->AttachCornerResizer(EUIResizerMode::Scale, false);
+#endif
     g->LoadFont("Roboto-Regular", ROBOTO_FN);
     g->LoadFont("Roboto-Bold", "Roboto-Bold.ttf");
     const auto image = g->LoadBitmap(GUITAR_FN);
@@ -454,6 +463,38 @@ PukeAcoustic::PukeAcoustic(const InstanceInfo& info) : Plugin(info, MakeConfig(N
     showSettings(false);
   };
 }
+
+bool PukeAcoustic::ConstrainEditorResize(int& width, int& height) const
+{
+  return nam_ui::ConstrainEditorSize(width, height, GetEditorWidth(), GetEditorHeight());
+}
+
+#if defined(OS_MAC) && defined(VST3_API)
+void PukeAcoustic::OnParentWindowResize(int width, int height)
+{
+  if (width <= 0 || height <= 0) return;
+  ConstrainEditorResize(width, height);
+  SetEditorSize(width, height);
+  if (auto* graphics = GetUI())
+  {
+    const float scale = std::nextafter(static_cast<float>(width) / PLUG_WIDTH,
+                                       static_cast<float>(PLUG_MAX_WIDTH));
+    graphics->Resize(PLUG_WIDTH, PLUG_HEIGHT, scale, false);
+  }
+}
+
+bool PukeAcoustic::EditorResizeFromUI(int, int, bool)
+{
+  // The host owns the VST3 window. Requesting another resize here can re-enter onSize.
+  return true;
+}
+
+void PukeAcoustic::OnUIOpen()
+{
+  Plugin::OnUIOpen();
+  OnParentWindowResize(GetEditorWidth(), GetEditorHeight());
+}
+#endif
 
 std::filesystem::path PukeAcoustic::FactoryPresetDirectory() const
 {
