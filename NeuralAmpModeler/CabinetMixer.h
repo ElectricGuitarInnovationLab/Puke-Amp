@@ -111,7 +111,8 @@ public:
   }
 
   // Render into the host's one or two output buffers. Inputs and outputs may alias.
-  void Process(double* input, double** out, int channels, int frames, const std::array<Mix, 2>& mix, bool enabled)
+  void Process(double* input, double** out, int channels, int frames, const std::array<Mix, 2>& mix, bool enabled,
+               double dryMix = 0.)
   {
     if (!frames || !channels)
       return;
@@ -123,7 +124,8 @@ public:
         mActive = next;
         mFadeRemaining = mFirstBlock ? 0 : mRampLength;
       }
-    mWet.Set(enabled ? 1. : 0., mRampLength, mFirstBlock);
+    const double wetTarget = enabled ? 1. - dryMix : 0.;
+    mWet.Set(wetTarget, mRampLength, mFirstBlock);
     for (int i = 0; i < 2; ++i)
       for (int c = 0; c < channels; ++c)
       {
@@ -131,10 +133,13 @@ public:
         mGain[i][c].Set(mix[i].level * (1. - std::max(0., pan)), mRampLength, mFirstBlock);
       }
     mFirstBlock = false;
-    const bool audible = enabled || mWet.value != 0.;
+    const bool audible = wetTarget != 0. || mWet.value != 0.;
     if (!audible)
     {
-      mHistoryCount = 0;
+      if (enabled && mActive && (mActive->irs[0] || mActive->irs[1]))
+        Remember(input, frames); // Prime the IRs when returning from fully dry.
+      else
+        mHistoryCount = 0;
       mFadeRemaining = 0;
       RetirePrevious();
       for (int c = 0; c < channels; ++c)

@@ -22,13 +22,13 @@ int main(int argc, char** argv)
     assert(mixer.Select({a, std::string{}}).status == Mixer::Status::SUCCESS);
     dsp::ImpulseResponse refA(a.c_str(), rate), refB(b.c_str(), rate);
     int frame = 0;
-    auto render = [&](int channels, bool enabled) {
+    auto render = [&](int channels, bool enabled, double dryMix = 0.) {
       for (double& value : input)
       {
         ++frame;
         value = std::sin(frame * .082) + .15 * std::cos(frame * .013);
       }
-      mixer.Process(source, output, channels, block, mix, enabled);
+      mixer.Process(source, output, channels, block, mix, enabled, dryMix);
       return std::array<const double*, 2>{refA.Process(&source, 1, block)[0], refB.Process(&source, 1, block)[0]};
     };
     mix = {};
@@ -38,6 +38,19 @@ int main(int argc, char** argv)
       for (int i = 0; i < block; ++i)
         assert(left[i] == ref[0][i] && right[i] == ref[0][i]);
     }
+    // Dry mix complements the wet level and ramps smoothly with both outputs connected.
+    for (int n = 0; n < 20; ++n)
+      render(2, true, .25);
+    auto blended = render(2, true, .25);
+    for (int i = 0; i < block; ++i)
+    {
+      const double expected = .25 * input[i] + .75 * blended[0][i];
+      assert(left[i] == expected && right[i] == expected);
+    }
+    for (int n = 0; n < 20; ++n)
+      render(2, true, 1.);
+    assert(left == input && right == input);
+
     mix[0].pan = -1.;
     mix[1].pan = 1.;
     for (int n = 0; n < 20; ++n)
