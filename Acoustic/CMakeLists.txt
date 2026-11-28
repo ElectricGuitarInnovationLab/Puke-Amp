@@ -57,7 +57,7 @@ foreach(format IN LISTS formats)
   target_compile_definitions(${target} PRIVATE ${format}_API IPLUG_EDITOR=1 IPLUG_DSP=1
     IGRAPHICS_NANOVG NOMINMAX $<$<CONFIG:Debug>:DEVELOPMENT=1> $<$<NOT:$<CONFIG:Debug>>:RELEASE=1>)
   target_include_directories(${target} PRIVATE . ${ip} ${ip}/Extras ${ip}/VST3 ${ip}/AUv2
-    ${root}/iPlug2/WDL ${root}/iPlug2/WDL/swell ${g} ${g}/Platforms ${g}/Drawing ${g}/Controls
+    ${root}/iPlug2/WDL ${g} ${g}/Platforms ${g}/Drawing ${g}/Controls
     ${g}/Extras ${gdeps}/NanoSVG/src ${gdeps}/NanoVG/src ${gdeps}/STB)
 
   if(format STREQUAL "VST3")
@@ -104,7 +104,7 @@ foreach(format IN LISTS formats)
     set_source_files_properties(${g}/Drawing/IGraphicsNanoVG_src.m PROPERTIES COMPILE_OPTIONS -fobjc-arc)
     target_compile_options(${target} PRIVATE -include "${ip}/IPlugOBJCPrefix.pch")
     target_compile_definitions(${target} PRIVATE IGRAPHICS_METAL OBJC_PREFIX=vPukeAcoustic SWELL_CLEANUP_ON_UNLOAD)
-    target_include_directories(${target} PRIVATE ${gdeps}/MetalNanoVG/src)
+    target_include_directories(${target} PRIVATE ${root}/iPlug2/WDL/swell ${gdeps}/MetalNanoVG/src)
     foreach(framework Cocoa Carbon CoreFoundation CoreData Foundation CoreServices QuartzCore Metal MetalKit
         CoreGraphics CoreText CoreVideo AudioToolbox AudioUnit CoreAudio CoreMIDI Accelerate)
       target_link_libraries(${target} PRIVATE "-framework ${framework}")
