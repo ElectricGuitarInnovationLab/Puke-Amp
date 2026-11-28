@@ -208,13 +208,27 @@ public:
     mMenu.Clear();
     mMenu.AddItem("Open Preset…");
     mMenu.AddItem("Save Preset As…");
-    mFiles = ListFiles(mPlugin.PresetDirectory(), ".fxp");
-    if (!mFiles.empty()) mMenu.AddSeparator();
-    for (size_t i = 0; i < mFiles.size(); ++i)
+    mFiles.clear();
+    auto addPresets = [&](IPopupMenu& menu, const fs::path& directory, const std::vector<fs::path>& files) {
+      for (const auto& file : files)
+      {
+        const auto label = PathString(file.lexically_relative(directory).replace_extension(), true);
+        menu.AddItem(new IPopupMenu::Item(label.c_str(), IPopupMenu::Item::kNoFlags,
+                                          static_cast<int>(mFiles.size())));
+        mFiles.push_back(file);
+      }
+    };
+    const auto factoryDir = mPlugin.FactoryPresetDirectory();
+    const auto factoryFiles = ListFiles(factoryDir, ".fxp");
+    if (!factoryFiles.empty())
     {
-      const auto label = PathString(mFiles[i].lexically_relative(mPlugin.PresetDirectory()).replace_extension(), true);
-      mMenu.AddItem(new IPopupMenu::Item(label.c_str(), IPopupMenu::Item::kNoFlags, static_cast<int>(i)));
+      auto* factory = new IPopupMenu();
+      addPresets(*factory, factoryDir, factoryFiles);
+      mMenu.AddItem("Factory Presets", factory);
     }
+    const auto userFiles = ListFiles(mPlugin.PresetDirectory(), ".fxp");
+    if (!userFiles.empty()) mMenu.AddSeparator();
+    addPresets(mMenu, mPlugin.PresetDirectory(), userFiles);
     GetUI()->CreatePopupMenu(*this, mMenu, mRECT);
   }
 
@@ -229,6 +243,7 @@ public:
       return;
     }
 
+    if (menu != &mMenu || menu->GetChosenItemIdx() > 1) return;
     const bool save = menu->GetChosenItemIdx() == 1;
     std::error_code ec;
     if (save && !mPlugin.PresetDirectory().empty()) fs::create_directories(mPlugin.PresetDirectory(), ec);
@@ -438,6 +453,11 @@ PukeAcoustic::PukeAcoustic(const InstanceInfo& info) : Plugin(info, MakeConfig(N
     }, "Close", style));
     showSettings(false);
   };
+}
+
+std::filesystem::path PukeAcoustic::FactoryPresetDirectory() const
+{
+  return mRoot.empty() ? fs::path{} : mRoot / "Presets";
 }
 
 std::filesystem::path PukeAcoustic::IRLibraryDirectory() const

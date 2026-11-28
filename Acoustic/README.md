@@ -8,7 +8,9 @@ Each IR menu can load a mono WAV directly into that slot or import a WAV or fold
 
 Use the Presets menu to open or save an Acoustic `.fxp` file. Files in the default save folder show up in the menu. A preset stores both IR selections and the full mix, including Dry Mix. Imported IRs resolve relative to the acoustic user library.
 
-## Build the prototype
+The **Factory Presets** submenu reads from the installed Acoustic bundle. Add portable FXPs under [Models/Instruments/Presets](../Models/Instruments/Presets), using bundled IRs in each populated slot. New files and subfolders are picked up by the next build. Check references from the repository root with `python3 Acoustic/validate_factory_presets.py`. Native packaging also runs this check against each staged Acoustic bundle.
+
+## Build Acoustic
 
 Use the pinned submodules, iPlug2 patches and VST3 SDK described in the [repository build guide](../README.md#building). Run the following from the repository root with CMake and a native compiler. On Windows use a Visual Studio x64 developer prompt and add `-A x64` to the configure command.
 

@@ -20,17 +20,17 @@
 			<key>type</key>
 			<string>aufx</string>
 			<key>version</key>
-			<integer>256</integer>
+			<integer>@acoustic_version_integer@</integer>
 		</dict>
 	</array>
 	<key>AudioUnit Version</key>
-	<string>0x00000100</string>
+	<string>@acoustic_version_hex@</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleExecutable</key>
 	<string>PukeAcoustic</string>
 	<key>CFBundleGetInfoString</key>
-	<string>PukeAcoustic v0.1.0 Copyright 2026 Puke Amp and contributors</string>
+	<string>PukeAcoustic v@PROJECT_VERSION@ Copyright 2026 Puke Amp and contributors</string>
 	<key>CFBundleIdentifier</key>
 	<string>org.theRATLAB.audiounit.PukeAcoustic</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -40,11 +40,11 @@
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>@PROJECT_VERSION@</string>
 	<key>CFBundleSignature</key>
 	<string>PkAc</string>
 	<key>CFBundleVersion</key>
-	<string>0.1.0</string>
+	<string>@PROJECT_VERSION@</string>
 	<key>CSResourcesFileMapped</key>
 	<true/>
 	<key>LSMinimumSystemVersion</key>

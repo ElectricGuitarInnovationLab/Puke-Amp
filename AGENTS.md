@@ -134,10 +134,10 @@ validation.
 
 ## Release and installer integration
 
-- [Build Puke Amp VST3](.github/workflows/build-native.yml) builds routine
-  macOS and Windows artifacts. [Release Puke Amp](.github/workflows/release-native.yml)
-  validates a version tag against `config.h`, packages installers, generates
-  checksums and creates a draft release for review. Follow the
+- [Build Puke Amp and Acoustic](.github/workflows/build-native.yml) builds both plugins for macOS and Windows. [Release Puke Amp](.github/workflows/release-native.yml)
+  validates a version tag against Amp’s `config.h`, packages both plugins into
+  one signed installer per platform, generates checksums and creates a draft
+  release for review. Follow the
   [release instructions](README.md#publishing-a-release) when releasing.
 - The updater looks at this repository's latest published GitHub release.
   When changing releases, naming, URLs or packaging, verify asset links and

@@ -23,6 +23,7 @@ public:
   bool LoadIR(int slot, const char* path);
   void ImportIRs(const char* path);
   const std::filesystem::path& PresetDirectory() const { return mPresetDirectory; }
+  std::filesystem::path FactoryPresetDirectory() const;
   std::filesystem::path IRLibraryDirectory() const;
   const std::string& GetPresetNameText() const { return mPresetName; }
   bool SavePreset(const std::filesystem::path& path);

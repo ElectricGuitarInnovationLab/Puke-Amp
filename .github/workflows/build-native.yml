@@ -1,4 +1,4 @@
-name: Build Puke Amp VST3
+name: Build Puke Amp and Acoustic
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    name: VST3 (${{ matrix.platform }})
+    name: Plugins (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -14,12 +14,14 @@ jobs:
         include:
           - platform: macOS
             os: macos-latest
-            artifact_name: Puke-Amp-VST3-macOS
+            artifact_name: Puke-Amp-Plugins-macOS
             artifact_path: NeuralAmpModeler/build-vst3/mac/Puke-Amp-*-macOS.zip
           - platform: Windows
             os: windows-latest
-            artifact_name: Puke-Amp-VST3-Windows
-            artifact_path: NeuralAmpModeler/build-vst3/windows/Puke-Amp-*-Windows*
+            artifact_name: Puke-Amp-Plugins-Windows
+            artifact_path: |
+              NeuralAmpModeler/build-vst3/windows/Puke-Amp-*-Windows*.zip
+              NeuralAmpModeler/build-vst3/windows/Puke-Amp-*-Windows-Setup*.exe
 
     steps:
       - name: Check out repository
@@ -53,17 +55,17 @@ jobs:
             throw "Inno Setup compiler was not installed at $iscc"
           }
 
-      - name: Build macOS VST3
+      - name: Build macOS plugins
         if: runner.os == 'macOS'
         shell: bash
         run: NeuralAmpModeler/scripts/make-vst3-mac.sh
 
-      - name: Build Windows VST3
+      - name: Build Windows plugins and test installer
         if: runner.os == 'Windows'
         shell: cmd
         run: NeuralAmpModeler\scripts\make-vst3-win.bat
 
-      - name: Upload packaged VST3
+      - name: Upload packaged plugins
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}

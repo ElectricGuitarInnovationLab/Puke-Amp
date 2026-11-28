@@ -29,6 +29,9 @@ jobs:
       - name: Check out tagged source
         uses: actions/checkout@v6
 
+      - name: Validate Acoustic factory presets
+        run: python3 Acoustic/validate_factory_presets.py
+
       - name: Read and validate version
         id: version
         shell: bash
@@ -57,7 +60,7 @@ jobs:
           echo "version=${config_version}" >> "${GITHUB_OUTPUT}"
 
   macos:
-    name: Build signed macOS installer
+    name: Build signed macOS installer for both plugins
     needs: validate
     runs-on: macos-latest
     env:
@@ -144,11 +147,12 @@ jobs:
           rm -f "${RUNNER_TEMP}/release-certificates.p12" "${RUNNER_TEMP}"/AuthKey_*.p8
 
   windows:
-    name: Build Windows installer
+    name: Build Windows installer for both plugins
     if: github.event_name == 'push' || inputs.build_windows
     needs: validate
     runs-on: windows-latest
     env:
+      REQUIRE_WINDOWS_SIGNING: ${{ github.event_name == 'push' && '1' || '0' }}
       WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
       WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
     steps:
@@ -182,9 +186,14 @@ jobs:
           }
 
       - name: Prepare Windows signing certificate
-        if: env.WINDOWS_CERTIFICATE_PFX_BASE64 != ''
         shell: pwsh
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PFX_BASE64)) {
+            if ($env:REQUIRE_WINDOWS_SIGNING -eq '1' -or $env:WINDOWS_CERTIFICATE_PASSWORD) {
+              throw 'WINDOWS_CERTIFICATE_PFX_BASE64 is required for Windows release signing.'
+            }
+            return
+          }
           if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
             throw "WINDOWS_CERTIFICATE_PASSWORD must be set when WINDOWS_CERTIFICATE_PFX_BASE64 is configured."
           }
@@ -202,7 +211,7 @@ jobs:
           "WINDOWS_CERTIFICATE_PATH=$certificatePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "WINDOWS_SIGNTOOL_PATH=$($signTool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Build Windows installer
+      - name: Build Windows installer for both plugins
         shell: cmd
         run: NeuralAmpModeler\scripts\make-vst3-win.bat
 
@@ -210,15 +219,16 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: release-windows
-          path: NeuralAmpModeler/build-vst3/windows/Puke-Amp-${{ needs.validate.outputs.version }}-Windows-Setup*.exe
+          path: NeuralAmpModeler/build-vst3/windows/Puke-Amp-${{ needs.validate.outputs.version }}-Windows-Setup${{ github.event_name == 'push' && '.exe' || '*.exe' }}
           if-no-files-found: error
 
       - name: Remove temporary signing material
         if: always()
         shell: pwsh
         run: |
-          if ($env:WINDOWS_CERTIFICATE_PATH -and (Test-Path $env:WINDOWS_CERTIFICATE_PATH)) {
-            Remove-Item $env:WINDOWS_CERTIFICATE_PATH -Force
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'release-certificate.pfx'
+          if (Test-Path $certificatePath) {
+            Remove-Item $certificatePath -Force
           }
 
   release:
@@ -236,22 +246,21 @@ jobs:
 
       - name: Generate SHA-256 checksums
         working-directory: release-assets
-        run: sha256sum Puke-Amp-* > SHA256SUMS.txt
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          sha256sum "Puke-Amp-${RELEASE_VERSION}-macOS.pkg" \
+            "Puke-Amp-${RELEASE_VERSION}-Windows-Setup.exe" > SHA256SUMS.txt
 
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          release_notice=""
-          if compgen -G "release-assets/*-Unsigned.exe" > /dev/null; then
-            release_notice="The Windows installer is unsigned. Windows will identify its publisher as Unknown and may display a SmartScreen warning. The macOS package is signed and notarized."
-          fi
-
           gh release create "${GITHUB_REF_NAME}" \
             --repo "${GITHUB_REPOSITORY}" \
             --verify-tag \
             --draft \
             --title "Puke Amp ${{ needs.validate.outputs.version }}" \
             --generate-notes \
-            --notes "${release_notice}" \
+            --notes "Each installer includes Puke Amp and Puke Amp: Acoustic." \
             release-assets/*

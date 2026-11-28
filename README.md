@@ -111,11 +111,11 @@ The original GitHub Actions workflows in the Neural Amp Modeler project also ser
 
 - https://github.com/sdatkinson/NeuralAmpModelerPlugin/tree/main/.github/workflows
 
-The separate [Puke Amp: Acoustic prototype](Acoustic/README.md) shares the dual IR mixer and has its own VST3 and macOS AUv2 build targets.
+[Puke Amp: Acoustic](Acoustic/README.md) shares the dual IR mixer and ships alongside Puke Amp in the platform installers.
 
-### Building Puke Amp VST3
+### Building the plugins
 
-The easiest option is **Actions → Build Puke Amp VST3 → Run workflow** on GitHub. When both jobs finish, download the `Puke-Amp-VST3-macOS` or `Puke-Amp-VST3-Windows` artifact. Each artifact contains a ZIP with the complete `Puke Amp.vst3` bundle, including `Models/Amp`, `Models/FX`, `Models/IR`, and `Models/Presets`. The Windows artifact also contains a versioned `Puke-Amp-<version>-Windows-Setup-Unsigned.exe` installer.
+Use **Actions → Build Puke Amp and Acoustic → Run workflow** on GitHub. Download the `Puke-Amp-Plugins-macOS` or `Puke-Amp-Plugins-Windows` artifact. Each ZIP includes both VST3 bundles. The macOS ZIP also includes the Acoustic AUv2 bundle, and the Windows artifact includes a test installer.
 
 #### Compiling the VST3 locally on macOS
 
@@ -194,7 +194,9 @@ Successful builds produce:
 
 ```text
 NeuralAmpModeler/build-vst3/mac/products/Puke Amp.vst3
-NeuralAmpModeler/build-vst3/mac/Puke-Amp-0.1.0-macOS.zip
+NeuralAmpModeler/build-vst3/mac/acoustic/products/PukeAcoustic.vst3
+NeuralAmpModeler/build-vst3/mac/acoustic/products/PukeAcoustic.component
+NeuralAmpModeler/build-vst3/mac/Puke-Amp-<version>-macOS.zip
 ```
 
 The `.vst3` path is a plugin bundle, even though Finder displays it like a
@@ -218,13 +220,11 @@ notarization key, and GitHub Actions secrets are documented in
 After the workflow and secrets are present on the default branch:
 
 1. Open **Actions → Release Puke Amp → Run workflow** on GitHub.
-2. Leave **Also build the Windows installer** unchecked.
+2. Leave **Also build the Windows installer** unchecked for a macOS-only run, or check it to test signing on both platforms.
 3. Run the workflow and wait for **Build signed macOS installer** to finish.
-4. Download the `release-macos` workflow artifact.
+4. Download the `release-macos` workflow artifact and, if selected, `release-windows`.
 
-The test builds and Developer ID-signs the VST3, creates and signs the installer
-package, submits it to Apple with `notarytool`, staples the ticket, and validates
-the result. It does not create a GitHub release.
+The test signs all three macOS bundles with Developer ID Application, signs the combined installer, submits it to Apple with `notarytool`, and staples and verifies the result. Artifacts from this run are available in GitHub Actions.
 
 Verify the downloaded package on a Mac if desired:
 
@@ -270,16 +270,16 @@ Releases are initiated by version tags. For example, to publish version `0.2.12`
    git push origin v0.2.12
    ```
 
-The **Release Puke Amp** workflow then validates the tag, builds both platforms,
-signs and notarizes macOS, generates `SHA256SUMS.txt`, and creates a draft GitHub
-release. Without optional Windows signing credentials, the Windows installer is
-clearly labeled `-Unsigned` and the draft contains an unknown-publisher warning.
+The **Release Puke Amp** workflow validates the tag, builds both plugins,
+signs one installer for each platform, notarizes and staples the macOS package,
+generates `SHA256SUMS.txt`, and creates a draft GitHub release. Tagged builds
+require the signing credentials for both platforms.
 
 Expected draft assets are:
 
 ```text
 Puke-Amp-0.2.1-macOS.pkg
-Puke-Amp-0.2.1-Windows-Setup-Unsigned.exe
+Puke-Amp-0.2.1-Windows-Setup.exe
 SHA256SUMS.txt
 ```
 
@@ -326,19 +326,18 @@ The 64-bit build, distributable ZIP, and Windows installer are written to:
 
 ```text
 NeuralAmpModeler\build-vst3\windows\Puke Amp.vst3
+NeuralAmpModeler\build-vst3\windows\PukeAcoustic.vst3
 NeuralAmpModeler\build-vst3\windows\Puke-Amp-0.1.0-Windows-Unsigned.zip
 NeuralAmpModeler\build-vst3\windows\Puke-Amp-0.1.0-Windows-Setup-Unsigned.exe
 ```
 
-Run the installer as an administrator to install the complete VST3 bundle in
-`C:\Program Files\Common Files\VST3\Puke Amp.vst3`, the standard system-wide
-location for a 64-bit Windows VST3. The installer also adds a normal Windows
+Run the installer as an administrator to install both VST3 bundles in
+`C:\Program Files\Common Files\VST3`. The installer adds one Windows
 uninstall entry. Restart the DAW or rescan its plugins after installation.
 
-The generated installer is not digitally signed. Windows may display an
-Unknown Publisher or SmartScreen warning. If optional Windows signing secrets
-are configured later, the build scripts sign the VST3 and installer and omit
-the `-Unsigned` filename suffix.
+Local builds without signing credentials produce an `-Unsigned` installer for
+development. With Windows signing credentials, the script signs both VST3
+binaries and the installer.
 
 
 ## Trademark Notice

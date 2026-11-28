@@ -3,3 +3,25 @@
 "Roboto-Regular.ttf" TTF "@font@"
 "puke.svg" SVG "@root@/NeuralAmpModeler/resources/img/puke.svg"
 "rat.svg" SVG "@root@/NeuralAmpModeler/resources/img/rat.svg"
+
+1 VERSIONINFO
+ FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+ PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+ FILEOS 0x00040004L
+ FILETYPE 0x2L
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "FileDescription", "Puke Amp: Acoustic VST3"
+      VALUE "FileVersion", "@PROJECT_VERSION@"
+      VALUE "ProductName", "Puke Amp: Acoustic"
+      VALUE "ProductVersion", "@PROJECT_VERSION@"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0409, 1200
+  END
+END
