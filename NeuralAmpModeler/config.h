@@ -1,7 +1,7 @@
 #define PLUG_NAME "Puke Amp"
 #define PLUG_MFR "Puke"
-#define PLUG_VERSION_HEX 0x00000300
-#define PLUG_VERSION_STR "0.3.0"
+#define PLUG_VERSION_HEX 0x00000301
+#define PLUG_VERSION_STR "0.3.1"
 #define STATE_VERSION_STR "0.7.18"
 #define PLUG_UNIQUE_ID 'PkAm'
 #define PLUG_MFR_ID 'SDAa'
