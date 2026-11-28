@@ -48,6 +48,6 @@ Before pushing a release tag, add these repository secrets under **Settings → 
 
 The optional Actions variable `MACOS_PACKAGE_ID` overrides the default package identifier `org.theRATLAB.PukeAmp.VST3`.
 
-Windows signing is required on a release tag. A manually dispatched Windows test can build an `-Unsigned` artifact when neither secret is configured.
+Windows signing is optional. When neither Windows certificate secret is configured, tagged releases build and publish an `-Unsigned` installer.
 
 Before publishing the draft, test both a clean installation and an upgrade from the previous Puke Amp installer. Rescan both plugins, open every Acoustic factory preset, and confirm that the center M149 preset clears slot B after a stereo preset. Check that user presets survive the upgrade and, on Windows, that uninstall removes both VST3 bundles.

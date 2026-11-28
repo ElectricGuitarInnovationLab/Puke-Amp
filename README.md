@@ -279,7 +279,7 @@ Expected draft assets are:
 
 ```text
 Puke-Amp-0.2.1-macOS.pkg
-Puke-Amp-0.2.1-Windows-Setup.exe
+Puke-Amp-0.2.1-Windows-Setup-Unsigned.exe
 SHA256SUMS.txt
 ```
 

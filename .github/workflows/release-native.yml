@@ -152,7 +152,6 @@ jobs:
     needs: validate
     runs-on: windows-latest
     env:
-      REQUIRE_WINDOWS_SIGNING: ${{ github.event_name == 'push' && '1' || '0' }}
     steps:
       - name: Prepare Windows signing certificate
         shell: pwsh
@@ -161,9 +160,10 @@ jobs:
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PFX_BASE64)) {
-            if ($env:REQUIRE_WINDOWS_SIGNING -eq '1' -or $env:WINDOWS_CERTIFICATE_PASSWORD) {
-              throw 'Set WINDOWS_CERTIFICATE_PFX_BASE64 in the repository Actions secrets to sign Windows releases.'
+            if ($env:WINDOWS_CERTIFICATE_PASSWORD) {
+              throw 'WINDOWS_CERTIFICATE_PASSWORD is set, but WINDOWS_CERTIFICATE_PFX_BASE64 is missing.'
             }
+            'No Windows signing certificate configured. The installer will be published with an -Unsigned suffix.'
             return
           }
           if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
@@ -222,7 +222,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: release-windows
-          path: NeuralAmpModeler/build-vst3/windows/Puke-Amp-${{ needs.validate.outputs.version }}-Windows-Setup${{ github.event_name == 'push' && '.exe' || '*.exe' }}
+          path: NeuralAmpModeler/build-vst3/windows/Puke-Amp-${{ needs.validate.outputs.version }}-Windows-Setup*.exe
           if-no-files-found: error
 
       - name: Remove temporary signing material
@@ -251,19 +251,22 @@ jobs:
         working-directory: release-assets
         env:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
-        run: |
-          sha256sum "Puke-Amp-${RELEASE_VERSION}-macOS.pkg" \
-            "Puke-Amp-${RELEASE_VERSION}-Windows-Setup.exe" > SHA256SUMS.txt
+        run: sha256sum Puke-Amp-* > SHA256SUMS.txt
 
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          release_notice=""
+          if compgen -G "release-assets/*-Unsigned.exe" > /dev/null; then
+            release_notice="The Windows installer is unsigned because Windows signing credentials are not configured. Windows may display an Unknown Publisher or SmartScreen warning."
+          fi
+
           gh release create "${GITHUB_REF_NAME}" \
             --repo "${GITHUB_REPOSITORY}" \
             --verify-tag \
             --draft \
             --title "Puke Amp ${{ needs.validate.outputs.version }}" \
             --generate-notes \
-            --notes "Each installer includes Puke Amp and Puke Amp: Acoustic." \
+            --notes "Each installer includes Puke Amp and Puke Amp: Acoustic. ${release_notice}" \
             release-assets/*
