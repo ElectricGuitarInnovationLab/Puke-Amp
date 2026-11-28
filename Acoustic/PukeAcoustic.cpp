@@ -2,6 +2,7 @@
 #include "IPlug_include_in_plug_src.h"
 #include "IControls.h"
 #include "UITheme.h"
+#include "SettingsCredits.h"
 #include "EditorSize.h"
 #include "IPlugPaths.h"
 #include "IRValidation.h"
@@ -447,16 +448,9 @@ PukeAcoustic::PukeAcoustic(const InstanceInfo& info) : Plugin(info, MakeConfig(N
     g->AttachControl(new ISVGButtonControl(IRECT(42,240,111,315), [](IControl* c) {
       c->GetUI()->OpenURL("https://theratlab.org");
     }, rat, rat));
-    auto link = [g, text](int top, const char* name, const char* url) {
-      g->AttachControl(new IURLControl(IRECT(122,top,575,top+24), name, url, text, COLOR_TRANSPARENT));
-    };
-    link(220, PLUG_NAME " / Neural Amp Modeler", "https://www.neuralampmodeler.com");
-    label(246, "NAM by Steven Atkinson / adapted by the RATLab");
     WDL_String build;
     build.SetFormatted(128, "Version %s  %s  %s", PLUG_VERSION_STR, GetArchStr(), GetAPIStr());
-    label(275, build.Get());
-    link(308, "Plugin by Steven Atkinson & Oli Larkin", "https://github.com/sdatkinson/NeuralAmpModelerPlugin/graphs/contributors");
-    link(343, "Third party notices", PLUG_URL_STR "/blob/HEAD/THIRD_PARTY.md");
+    g->AttachControl(new nam_ui::SettingsCredits(IRECT(122,220,575,336), text, build.Get()));
     g->AttachControl(new IVButtonControl(IRECT(680,20,780,54), [showSettings](IControl*) {
       showSettings(false);
     }, "Close", style));
