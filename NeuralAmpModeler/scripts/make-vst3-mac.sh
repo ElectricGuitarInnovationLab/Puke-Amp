@@ -141,9 +141,19 @@ build_component() {
   component_plist="${payload}.plist"
   mkdir -p "${payload}"
   ditto "${bundle}" "${payload}/${name}"
-  pkgbuild --analyze --root "${payload}" "${component_plist}"
-  /usr/libexec/PlistBuddy -c 'Set :0:BundleIsRelocatable false' \
-    -c 'Set :0:BundleOverwriteAction upgrade' "${component_plist}"
+  # Each payload has one known top-level bundle. Supply its installer metadata
+  # directly because pkgbuild --analyze can omit default-valued keys.
+  python3 - "${component_plist}" "${name}" <<'PYPLIST'
+import plistlib
+import sys
+
+with open(sys.argv[1], "wb") as output:
+    plistlib.dump([{
+        "RootRelativeBundlePath": sys.argv[2],
+        "BundleIsRelocatable": False,
+        "BundleOverwriteAction": "upgrade",
+    }], output)
+PYPLIST
   pkgbuild --root "${payload}" --component-plist "${component_plist}" \
     --identifier "${identifier}" --version "${component_version}" \
     --install-location "${location}" "${component_packages_dir}/${identifier}.pkg"

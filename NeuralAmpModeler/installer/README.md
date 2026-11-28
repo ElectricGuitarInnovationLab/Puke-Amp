@@ -33,7 +33,7 @@ Pushing a tag such as `v0.2.0` runs `.github/workflows/release-native.yml`. The 
 
 To test macOS signing without creating a tag or release, open **Actions → Release Puke Amp → Run workflow**. Leave **Also build the Windows installer** unchecked. The workflow builds, signs, notarizes, and staples the macOS package, then makes it available as the `release-macos` workflow artifact.
 
-Configure these GitHub Actions secrets before pushing a release tag:
+Before pushing a release tag, add these repository secrets under **Settings → Secrets and variables → Actions → New repository secret**:
 
 - `MACOS_CERTIFICATE_P12_BASE64`: Base64-encoded PKCS#12 containing the Developer ID Application and Developer ID Installer certificates and private keys.
 - `MACOS_CERTIFICATE_P12_PASSWORD`: Password for that PKCS#12 file.

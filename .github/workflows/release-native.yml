@@ -153,9 +153,36 @@ jobs:
     runs-on: windows-latest
     env:
       REQUIRE_WINDOWS_SIGNING: ${{ github.event_name == 'push' && '1' || '0' }}
-      WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
-      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
     steps:
+      - name: Prepare Windows signing certificate
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PFX_BASE64)) {
+            if ($env:REQUIRE_WINDOWS_SIGNING -eq '1' -or $env:WINDOWS_CERTIFICATE_PASSWORD) {
+              throw 'Set WINDOWS_CERTIFICATE_PFX_BASE64 in the repository Actions secrets to sign Windows releases.'
+            }
+            return
+          }
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
+            throw 'Set WINDOWS_CERTIFICATE_PASSWORD in the repository Actions secrets when a Windows PFX is configured.'
+          }
+
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'release-certificate.pfx'
+          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX_BASE64))
+
+          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signTool) {
+            throw "signtool.exe was not found."
+          }
+
+          "WINDOWS_CERTIFICATE_PATH=$certificatePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WINDOWS_SIGNTOOL_PATH=$($signTool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Check out tagged source
         uses: actions/checkout@v6
         with:
@@ -185,34 +212,10 @@ jobs:
             throw "Inno Setup compiler was not installed at $iscc"
           }
 
-      - name: Prepare Windows signing certificate
-        shell: pwsh
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PFX_BASE64)) {
-            if ($env:REQUIRE_WINDOWS_SIGNING -eq '1' -or $env:WINDOWS_CERTIFICATE_PASSWORD) {
-              throw 'WINDOWS_CERTIFICATE_PFX_BASE64 is required for Windows release signing.'
-            }
-            return
-          }
-          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
-            throw "WINDOWS_CERTIFICATE_PASSWORD must be set when WINDOWS_CERTIFICATE_PFX_BASE64 is configured."
-          }
-
-          $certificatePath = Join-Path $env:RUNNER_TEMP 'release-certificate.pfx'
-          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX_BASE64))
-
-          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
-            Sort-Object FullName -Descending |
-            Select-Object -First 1
-          if (-not $signTool) {
-            throw "signtool.exe was not found."
-          }
-
-          "WINDOWS_CERTIFICATE_PATH=$certificatePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "WINDOWS_SIGNTOOL_PATH=$($signTool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
       - name: Build Windows installer for both plugins
         shell: cmd
+        env:
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: NeuralAmpModeler\scripts\make-vst3-win.bat
 
       - name: Upload Windows release asset
